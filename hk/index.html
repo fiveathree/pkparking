@@ -529,6 +529,34 @@ function crunch(sp) {
   src.buffer = buf; src.connect(f).connect(g).connect(ac.destination); src.start();
 }
 
+// ---------- mirrors: each renders a live rear view into a texture, shown flipped like real glass ----------
+const mirrorScene = new T.Scene(), mirrorCam = new T.OrthographicCamera(0, 1, 0, -1, -10, 10);
+function makeMirror(fov, aspect) {
+  const rt = new T.WebGLRenderTarget(256, 160);
+  const cam = new T.PerspectiveCamera(fov, aspect, .1, 80);
+  const tex = rt.texture; tex.repeat.set(-1, 1); tex.offset.set(1, 0);
+  const frame = new T.Mesh(new T.PlaneGeometry(1, 1), new T.MeshBasicMaterial({ color: 0x111316, depthTest: false }));
+  const glass = new T.Mesh(new T.PlaneGeometry(1, 1), new T.MeshBasicMaterial({ map: tex, depthTest: false }));
+  glass.renderOrder = 1; mirrorScene.add(frame); mirrorScene.add(glass);
+  return { rt, cam, frame, glass, rect: null };
+}
+function placeMirror(m, x, y, w, h, border) {
+  m.rect = { x, y, w, h };
+  m.frame.scale.set(w + border * 2, h + border * 2, 1); m.frame.position.set(x + w / 2, -(y + h / 2), 0);
+  m.glass.scale.set(w, h, 1); m.glass.position.set(x + w / 2, -(y + h / 2), 1);
+  const dpr = renderer.getPixelRatio(); m.rt.setSize(Math.max(64, Math.round(w * dpr)), Math.max(32, Math.round(h * dpr)));
+  m.cam.aspect = w / h; m.cam.updateProjectionMatrix();
+}
+function aimMirror(m, px, py, pz, tx, ty, tz) { m.cam.position.set(px, py, pz); m.cam.lookAt(tx, ty, tz); }
+function drawMirrors(list, w, h) {
+  for (const m of list) { renderer.setRenderTarget(m.rt); renderer.clear(); renderer.render(scene, m.cam); }
+  renderer.setRenderTarget(null); renderer.setViewport(0, 0, w, h);
+  mirrorScene.children.forEach(o => o.visible = false);
+  list.forEach(m => { m.frame.visible = m.glass.visible = true; });
+  mirrorCam.left = 0; mirrorCam.right = w; mirrorCam.top = 0; mirrorCam.bottom = -h; mirrorCam.updateProjectionMatrix();
+  renderer.autoClear = false; renderer.clearDepth(); renderer.render(mirrorScene, mirrorCam); renderer.autoClear = true;
+}
+const mirC = makeMirror(20, 3.4), mirL = makeMirror(26, 1.5), mirR = makeMirror(26, 1.5);
 // ---------- camera / layout ----------
 let availTop = 0, availBot = 0, snapCam = true, rearRect = null;
 const camPos = new T.Vector3(), camLook = new T.Vector3();
@@ -544,7 +572,12 @@ function layout() {
   $('sensors').style.top = (hb + 2) + 'px';
   $('hint').style.top = (availBot - 40) + 'px';
   const iw = Math.min(240, w * .42), ih = iw * .62;
-  rearRect = { x: w - iw - Math.max(16, 12), y: hb + 34, w: iw, h: ih };
+  rearRect = camMode === 'pov' ? { x: (w - iw) / 2, y: Math.max(hb + 120, availBot - ih - 70), w: iw, h: ih } : { x: w - iw - 16, y: hb + 34, w: iw, h: ih };
+  { // driver's mirrors: rear-view at the top of the windshield (left of centre for right-hand drive), wing mirrors at both sides
+    const cw = Math.min(300, w * .5), ch = cw * .3; placeMirror(mirC, w / 2 - cw / 2 - w * .06, hb + 32, cw, ch, 4);
+    const sw = Math.min(170, w * .3), sh = sw * .66, my = availTop + (availBot - availTop) * .42;
+    placeMirror(mirL, 10, my, sw, sh, 4); placeMirror(mirR, w - sw * 1.1 - 10, my - sh * .05, sw * 1.1, sh * 1.1, 4);
+  }
   const rc = $('rearcam'); Object.assign(rc.style, { left: rearRect.x + 'px', top: rearRect.y + 'px', width: iw + 'px', height: ih + 'px' });
   rearCam.aspect = iw / ih; rearCam.updateProjectionMatrix();
   if (camMode === 'pov') { camera.fov = povFov(); camera.updateProjectionMatrix(); }
@@ -556,7 +589,7 @@ function applyCamVis() {
   snapCam = true;
 }
 function povFov() { const a = camera.aspect || 1; return Math.min(80, Math.max(62, 2 * Math.atan(Math.tan(41 * PI / 180) / a) * 180 / PI)); }
-function toggleCam() { camMode = { top: 'chase', chase: 'pov', pov: 'top' }[camMode]; lookYaw = 0; applyCamVis(); }
+function toggleCam() { camMode = { top: 'chase', chase: 'pov', pov: 'top' }[camMode]; lookYaw = 0; applyCamVis(); layout(); }
 function updateCamera(dt) {
   const c = Math.cos(car.a), s = Math.sin(car.a);
   let want, look, k = snapCam ? 1 : 1 - Math.exp(-dt * 5);
@@ -608,6 +641,14 @@ function render(now, dt) {
     renderer.setScissorTest(true); renderer.setScissor(r.x, y, r.w, r.h); renderer.setViewport(r.x, y, r.w, r.h);
     pc.root.visible = false; renderer.render(scene, rearCam); pc.root.visible = true;
     renderer.setScissorTest(false); renderer.setViewport(0, 0, w, h);
+  }
+  if (camMode === 'pov' && mode === 'play') {
+    const c = Math.cos(car.a), s = Math.sin(car.a), lx = -s, lz = c;   // l = car's right-hand side
+    const at = (fx, rx, y) => [car.x + c * fx + lx * rx, y, car.y + s * fx + lz * rx];
+    let p = at(.35, .05, 1.34), t = at(-10, .05, .9); aimMirror(mirC, ...p, ...t);
+    p = at(.85, -1.02, 1.0); t = at(-10, -2.6, .4); aimMirror(mirL, ...p, ...t);
+    p = at(.85, 1.02, 1.0); t = at(-10, 2.6, .4); aimMirror(mirR, ...p, ...t);
+    drawMirrors([mirC, mirL, mirR], w, h);
   }
   $('flash').style.opacity = flash > 0 ? (flash * .3).toFixed(3) : '0';
 }

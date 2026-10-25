@@ -630,6 +630,43 @@ function inTarget() {
   return 'in';
 }
 
+// ---------- mirrors: each renders a live rear view into a texture, shown flipped like real glass ----------
+const mirrorScene = new T.Scene(), mirrorCam = new T.OrthographicCamera(0, 1, 0, -1, -10, 10);
+function makeMirror(fov, aspect) {
+  const rt = new T.WebGLRenderTarget(256, 160);
+  const cam = new T.PerspectiveCamera(fov, aspect, .1, 80);
+  const tex = rt.texture; tex.repeat.set(-1, 1); tex.offset.set(1, 0);
+  const frame = new T.Mesh(new T.PlaneGeometry(1, 1), new T.MeshBasicMaterial({ color: 0x111316, depthTest: false }));
+  const glass = new T.Mesh(new T.PlaneGeometry(1, 1), new T.MeshBasicMaterial({ map: tex, depthTest: false }));
+  glass.renderOrder = 1; mirrorScene.add(frame); mirrorScene.add(glass);
+  return { rt, cam, frame, glass, rect: null };
+}
+function placeMirror(m, x, y, w, h, border) {
+  m.rect = { x, y, w, h };
+  m.frame.scale.set(w + border * 2, h + border * 2, 1); m.frame.position.set(x + w / 2, -(y + h / 2), 0);
+  m.glass.scale.set(w, h, 1); m.glass.position.set(x + w / 2, -(y + h / 2), 1);
+  const dpr = renderer.getPixelRatio(); m.rt.setSize(Math.max(64, Math.round(w * dpr)), Math.max(32, Math.round(h * dpr)));
+  m.cam.aspect = w / h; m.cam.updateProjectionMatrix();
+}
+function aimMirror(m, px, py, pz, tx, ty, tz) { m.cam.position.set(px, py, pz); m.cam.lookAt(tx, ty, tz); }
+function drawMirrors(list, w, h) {
+  for (const m of list) { renderer.setRenderTarget(m.rt); renderer.clear(); renderer.render(scene, m.cam); }
+  renderer.setRenderTarget(null); renderer.setViewport(0, 0, w, h);
+  mirrorScene.children.forEach(o => o.visible = false);
+  list.forEach(m => { m.frame.visible = m.glass.visible = true; });
+  mirrorCam.left = 0; mirrorCam.right = w; mirrorCam.top = 0; mirrorCam.bottom = -h; mirrorCam.updateProjectionMatrix();
+  renderer.autoClear = false; renderer.clearDepth(); renderer.render(mirrorScene, mirrorCam); renderer.autoClear = true;
+}
+const mirL = makeMirror(28, 1.45), mirR = makeMirror(28, 1.45);
+function scooterMirrors() {
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (!(camMode === 'pov' && mode === 'ride' && phase === 'play')) return;
+  const c = Math.cos(own.a), s = Math.sin(own.a), lx = -s, lz = c;
+  const at = (fx, rx, y) => [own.x + c * fx + lx * rx, y, own.z + s * fx + lz * rx];
+  let p = at(.46, -.34, 1.36), t = at(-10, -1.6, .5); aimMirror(mirL, ...p, ...t);
+  p = at(.46, .34, 1.36); t = at(-10, 1.6, .5); aimMirror(mirR, ...p, ...t);
+  drawMirrors([mirL, mirR], w, h);
+}
 // ---------- UI ----------
 function syncUI() {
   const rb = $('bRide');
@@ -664,6 +701,8 @@ function layout() {
   const ct = $('controls').getBoundingClientRect().top - $('app').getBoundingClientRect().top;
   $('chip').style.top = (hb - 8) + 'px';
   $('hint').style.top = Math.max(hb + 22, ct - 48) + 'px';
+  const sw = Math.min(150, w * .3), sh = sw * .68;
+  placeMirror(mirL, 12, hb + 34, sw, sh, 4); placeMirror(mirR, w - sw - 12, hb + 34, sw, sh, 4);
 }
 
 // ---------- end ----------
@@ -772,7 +811,7 @@ function frame(now) {
     updateHUD(dt);
     if (inTarget() === 'in' && mode !== 'ride' && !grab) { holdT += dt; if (holdT > .6) win(); } else holdT = 0;
   }
-  if (L) { syncMeshes(dt, now); renderer.render(scene, camera); }
+  if (L) { syncMeshes(dt, now); renderer.render(scene, camera); scooterMirrors(); }
   requestAnimationFrame(frame);
 }
 
