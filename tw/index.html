@@ -1,0 +1,738 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>機車格地獄</title>
+<meta name="description" content="3D 台灣騎樓機車格泊車遊戲：機車冇倒後，要落車手推、拉車尾擺正人哋架車，唔好推冧。">
+<meta name="theme-color" content="#0b0d14">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta property="og:type" content="website">
+<meta property="og:title" content="機車格地獄">
+<meta property="og:description" content="台灣騎樓機車格，一架貼一架。機車冇倒後，要落車手推，仲要幫人擺正，唔好推冧！">
+<meta property="og:url" content="https://fiveathree.github.io/pkparking/tw/">
+<meta property="og:image" content="https://fiveathree.github.io/pkparking/tw/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="機車格地獄">
+<meta name="twitter:description" content="台灣騎樓機車格泊車遊戲，3D，五關。">
+<meta name="twitter:image" content="https://fiveathree.github.io/pkparking/tw/og-image.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@500;700;900&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none!important}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0}
+.xlink{color:var(--ok);font-weight:700;text-decoration:none}
+/* Layout: full-bleed 3D street; slim signage HUD on top; joystick bottom-left, action buttons bottom-right */
+:root{
+  --bg:#0b0d14;
+  --panel:#151925;
+  --line:#2a3042;
+  --ink:#f1ede4;
+  --muted:#8f95a3;
+  --sign:#ff6a3d;
+  --ok:#3fd1a8;
+  --f-display:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-display);overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+#app{position:relative;height:100%;overflow:hidden}
+#gl{position:absolute;inset:0;width:100%;height:100%;display:block}
+button{font-family:inherit;color:inherit;cursor:pointer}
+button:focus-visible{outline:2px solid var(--ok);outline-offset:2px}
+
+#hud{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding-block:10px 18px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  background:linear-gradient(rgba(11,13,20,.92) 55%,transparent);pointer-events:none}
+#hud > *{pointer-events:auto}
+.lvl{display:flex;align-items:center;gap:8px;min-width:0}
+.lvl b{font-family:var(--f-mono);font-weight:600;background:var(--sign);color:#1a0d07;padding:2px 7px;border-radius:3px;font-size:14px}
+.lvl span{font-weight:900;font-size:15px;white-space:nowrap}
+.stats{display:flex;gap:12px;font-family:var(--f-mono);font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.stats em{font-style:normal;color:var(--ink)}
+.stats .bad em{color:var(--sign)}
+.tools{margin-left:auto;display:flex;gap:6px}
+.tools button{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:5px 9px;font-size:13px;font-weight:700}
+#chip{position:absolute;left:50%;transform:translateX(-50%);font-size:12px;font-weight:700;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:3px 10px;pointer-events:none;white-space:nowrap}
+#hint{position:absolute;left:50%;transform:translateX(-50%);max-width:min(92vw,520px);text-align:center;background:rgba(11,13,20,.82);border:1px solid var(--line);
+  border-radius:6px;padding:6px 12px;font-size:13px;line-height:1.5;pointer-events:none}
+#hint.good{background:var(--ok);color:#06231b;border-color:var(--ok);font-weight:900}
+#toast{position:absolute;left:50%;top:38%;transform:translateX(-50%);background:var(--sign);color:#1a0d07;font-weight:900;font-size:20px;padding:8px 18px;border-radius:4px;pointer-events:none}
+
+#controls{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:space-between;align-items:flex-end;gap:12px;
+  padding-block:0 16px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));pointer-events:none}
+#controls > *{pointer-events:auto}
+#joy{width:128px;height:128px;border-radius:50%;background:radial-gradient(circle,rgba(21,25,37,.75) 60%,rgba(42,48,66,.9) 61%,rgba(21,25,37,.75) 64%);
+  border:1px solid var(--line);position:relative;touch-action:none}
+#knob{position:absolute;left:50%;top:50%;width:56px;height:56px;margin:-28px 0 0 -28px;border-radius:50%;background:#2a3042;border:2px solid #4a5370;box-shadow:0 4px 10px rgba(0,0,0,.5)}
+.acts{display:flex;flex-direction:column;gap:10px;align-items:flex-end}
+.act{min-width:112px;padding:14px 16px;border-radius:12px;border:1px solid var(--line);background:var(--panel);font-weight:900;font-size:17px;touch-action:none}
+.act.main{background:var(--ok);color:#06231b;border-color:var(--ok)}
+.act.push{background:var(--sign);color:#1a0d07;border-color:var(--sign)}
+.act:disabled{opacity:.35;cursor:not-allowed;background:var(--panel);color:var(--muted);border-color:var(--line)}
+@media (orientation:landscape) and (max-height:520px){#joy{width:110px;height:110px}.act{padding:10px 14px;font-size:15px}}
+
+.overlay{position:absolute;inset:0;z-index:5;background:rgba(7,8,13,.86);backdrop-filter:blur(4px);display:flex;overflow:auto;
+  padding-block:20px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.card{width:100%;max-width:580px;margin:auto;display:flex;flex-direction:column;gap:16px}
+.brand{display:flex;flex-direction:column;gap:8px}
+.brand .slots{height:14px;background:repeating-linear-gradient(90deg,var(--ink) 0 3px,transparent 3px 34px);border-top:3px solid var(--ink);opacity:.85}
+.brand h1{margin:0;font-weight:900;font-size:clamp(42px,12vw,72px);line-height:1;letter-spacing:.02em}
+.brand h1 i{font-style:normal;color:var(--sign)}
+.brand p{margin:0;color:var(--muted);font-size:15px;line-height:1.6;max-width:36em}
+.levels{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+.lv{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px;text-align:left;display:flex;flex-direction:column;gap:5px;min-width:0}
+.lv:hover:not(:disabled){border-color:var(--ok)}
+.lv:disabled{opacity:.4;cursor:not-allowed}
+.lv .no{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.lv .nm{font-weight:900;font-size:17px}
+.lv .st{color:var(--ok);letter-spacing:2px;font-size:14px}
+.lv .st s,.big s{text-decoration:none;color:var(--line)}
+.help{font-size:13px;color:var(--muted);line-height:1.7;border-top:1px solid var(--line);padding-top:12px}
+.help kbd{font-family:var(--f-mono);background:var(--panel);border:1px solid var(--line);border-radius:3px;padding:0 5px;color:var(--ink);font-size:12px}
+.res h2{margin:0;font-size:38px;font-weight:900}
+.big{font-size:40px;letter-spacing:6px;color:var(--ok)}
+dl{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;margin:0;font-size:15px}
+dt{color:var(--muted)} dd{margin:0;font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.tip{background:var(--panel);border-left:4px solid var(--sign);padding:10px 12px;font-size:14px;line-height:1.7}
+.btns{display:flex;gap:10px;flex-wrap:wrap}
+.btn{border:0;border-radius:6px;padding:12px 18px;font-weight:900;font-size:16px;background:var(--ok);color:#06231b}
+.btn.ghost{background:var(--panel);color:var(--ink);border:1px solid var(--line)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="gl"></canvas>
+  <div id="hud">
+    <div class="lvl"><b id="lvNo">No.1</b><span id="lvName">騎樓入門</span></div>
+    <div class="stats">
+      <span>時間 <em id="sTime">0.0</em>s</span>
+      <span id="sTipW">推冧 <em id="sTip">0</em></span>
+    </div>
+    <div class="tools">
+      <button id="bCam">俯視</button>
+      <button id="bRetry">重來</button>
+      <button id="bMenu">選關</button>
+    </div>
+  </div>
+  <div id="chip">騎緊車</div>
+  <div id="hint" hidden></div>
+  <div id="toast" hidden></div>
+  <div id="controls">
+    <div id="joy" aria-label="搖桿"><div id="knob"></div></div>
+    <div class="acts">
+      <button class="act push" id="bGrab" disabled>推車</button>
+      <button class="act main" id="bRide">落車</button>
+    </div>
+  </div>
+  <div class="overlay" id="ov" hidden></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(() => {
+'use strict';
+const T = THREE, PI = Math.PI;
+const HL = .925, HW = .36, WB = 1.25, AXO = .62, SLOT_D = 2.2;
+const $ = id => document.getElementById(id);
+
+// ---------- seeded random ----------
+function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+
+// ---------- levels ----------
+// slots run along x (1 m each) from x=0, z from -2.2 (arcade side) to 0 (road edge). Road is z 0..8.
+const LEVELS = [
+  { name:'騎樓入門', n:12, target:6, empty:[2], need:null, start:{x:1.2,z:4,a:0}, par:45,
+    tip:'騎到亮咗嘅格，車頭直入都得。停好之後撳「落車」，就算泊好。' },
+  { name:'車頭向外', n:12, target:5, empty:[], need:PI/2, start:{x:10.5,z:4,a:PI}, par:70,
+    tip:'台灣機車多數車頭向外泊。機車冇倒後波，要落車，撳「推車」捉住車頭，用手拉入格。' },
+  { name:'借位擺正', n:12, target:7, empty:[], need:PI/2, start:{x:2,z:4,a:0}, par:110,
+    adj:{6:{dx:.27,da:.24},8:{dx:-.26,da:-.22}},
+    tip:'隔籬兩架泊到斜晒，食咗你個格。行入騎樓，喺車尾撳「拉車尾」，左右擺正佢哋。唔好推冧！' },
+  { name:'夜市口', n:14, target:11, empty:[13], need:PI/2, start:{x:2,z:4,a:0}, par:140,
+    adj:{10:{dx:.18,da:.12}}, extra:[{x:11.4,z:.9,a:.35}],
+    tip:'有人將架車擺咗喺格口出面。推佢去最尾嗰個空格，唔好隨便丟喺路邊阻人。' },
+  { name:'捷運站地獄', n:14, target:6, empty:[5], need:PI/2, start:{x:12,z:4,a:PI}, par:170,
+    adj:{4:{dx:0,da:-.1},7:{dx:.06,da:.14}}, extra:[{x:6.0,z:-1.15,a:PI/2+.38}],
+    tip:'有架車打斜泊，一架霸兩格。拉佢車尾擺正入左邊個格，騰返位俾自己。' },
+];
+
+// ---------- renderer / scene ----------
+const canvas = $('gl');
+const renderer = new T.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
+renderer.outputEncoding = T.sRGBEncoding;
+renderer.toneMapping = T.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.15;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap;
+const scene = new T.Scene();
+scene.background = new T.Color('#0b0d14');
+scene.fog = new T.Fog('#0b0d14', 22, 48);
+const camera = new T.PerspectiveCamera(48, 1, .1, 120);
+scene.add(new T.HemisphereLight(0x9aa8d0, 0x3a2c22, .75));
+const sun = new T.DirectionalLight(0xc8d4ff, .55);
+sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left:-14, right:14, top:12, bottom:-12, near:1, far:40 });
+scene.add(sun); scene.add(sun.target);
+
+const M = (c, r = .6, m = 0, e) => new T.MeshStandardMaterial({ color: c, roughness: r, metalness: m, emissive: e || 0x000000 });
+const BASIC = c => new T.MeshBasicMaterial({ color: c });
+
+// ---------- textures ----------
+function canvasTex(w, h, draw) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d'); draw(g, w, h);
+  const t = new T.CanvasTexture(c); t.encoding = T.sRGBEncoding; t.anisotropy = 4; return t;
+}
+const FONT = '"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif';
+
+// ---------- models ----------
+const WHEEL_G = new T.CylinderGeometry(.2, .2, .11, 18); WHEEL_G.rotateX(PI / 2);
+const darkM = M(0x18191d, .8), greyM = M(0x4c5058, .7), chromeM = M(0xc8ccd2, .3, .7), redL = M(0x550000, .4, 0, 0xff2a1a), headL = M(0xffffff, .3, 0, 0xfff1c8), plateM = M(0xf2f2ee, .5);
+function box(w, h, d, m, x, y, z, parent) { const b = new T.Mesh(new T.BoxGeometry(w, h, d), m); b.position.set(x, y, z); b.castShadow = true; parent.add(b); return b; }
+function makeScooter(color) {
+  const root = new T.Group(), inner = new T.Group(); root.add(inner);
+  const body = M(color, .42, .15);
+  const rw = new T.Mesh(WHEEL_G, darkM); rw.position.set(-.62, .2, 0); rw.castShadow = true; inner.add(rw);
+  box(1.0, .12, .42, greyM, -.05, .3, 0, inner);
+  box(.85, .42, .5, body, -.48, .56, 0, inner);
+  box(.32, .22, .46, body, -.85, .5, 0, inner);
+  box(.8, .12, .4, darkM, -.42, .83, 0, inner);
+  box(.05, .08, .3, redL, -1.0, .58, 0, inner);
+  box(.02, .12, .22, plateM, -1.02, .38, 0, inner);
+  const shield = box(.14, .62, .58, body, .45, .62, 0, inner); shield.rotation.z = .28;
+  const front = new T.Group(); front.position.set(.5, 0, 0); inner.add(front);
+  const fw = new T.Mesh(WHEEL_G, darkM); fw.position.set(.15, .2, 0); fw.castShadow = true; front.add(fw);
+  box(.32, .08, .17, body, .15, .43, 0, front);
+  box(.05, .5, .05, chromeM, .1, .6, 0, front);
+  box(.08, .3, .08, darkM, 0, .98, 0, front);
+  box(.06, .06, .72, darkM, -.02, 1.1, 0, front);
+  box(.22, .15, .32, body, .03, 1.12, 0, front);
+  box(.04, .1, .18, headL, .15, 1.12, 0, front);
+  for (const s of [-1, 1]) { box(.02, .2, .02, chromeM, -.04, 1.22, .3 * s, front); box(.03, .07, .11, chromeM, -.04, 1.33, .3 * s, front); }
+  return { root, inner, front };
+}
+function makePerson() {
+  const root = new T.Group();
+  const jeans = M(0x2c3a5a, .8), shirt = M(0xe9e4d6, .8), skin = M(0xe0b896, .7), helmet = M(0xffc83d, .35, .1), visor = M(0x1d2a33, .2, .4);
+  const legs = [];
+  for (const s of [-1, 1]) { const hip = new T.Group(); hip.position.set(0, .8, .1 * s); root.add(hip); box(.15, .8, .15, jeans, 0, -.4, 0, hip); box(.24, .08, .14, darkM, .05, -.79, 0, hip); legs.push(hip); }
+  box(.26, .6, .42, shirt, 0, 1.12, 0, root);
+  const arms = [];
+  for (const s of [-1, 1]) { const sh = new T.Group(); sh.position.set(0, 1.38, .26 * s); root.add(sh); box(.12, .58, .12, shirt, 0, -.27, 0, sh); box(.1, .1, .1, skin, 0, -.6, 0, sh); arms.push(sh); }
+  const head = new T.Mesh(new T.SphereGeometry(.13, 16, 12), skin); head.position.y = 1.58; head.castShadow = true; root.add(head);
+  const hm = new T.Mesh(new T.SphereGeometry(.165, 18, 12, 0, PI * 2, 0, PI * .55), helmet); hm.position.y = 1.6; hm.castShadow = true; root.add(hm);
+  box(.04, .07, .26, visor, .14, 1.6, 0, root);
+  return { root, legs, arms };
+}
+
+// ---------- geometry ----------
+function poly(x, z, a, hl, hw) {
+  const c = Math.cos(a), s = Math.sin(a);
+  return [[x + c*hl - s*hw, z + s*hl + c*hw], [x + c*hl + s*hw, z + s*hl - c*hw], [x - c*hl + s*hw, z - s*hl - c*hw], [x - c*hl - s*hw, z - s*hl + c*hw]];
+}
+function scPoly(s, x = s.x, z = s.z, a = s.a) {
+  if (!s.tipped) return poly(x, z, a, HL, HW);
+  const k = .42 * s.fallDir; return poly(x - Math.sin(a) * k, z + Math.cos(a) * k, a, .95, .55);
+}
+const rectPoly = r => [[r.x, r.z], [r.x + r.w, r.z], [r.x + r.w, r.z + r.d], [r.x, r.z + r.d]];
+function sat(A, B) {
+  for (const P of [A, B]) for (let i = 0; i < P.length; i++) {
+    const p = P[i], q = P[(i + 1) % P.length], ax = p[1] - q[1], az = q[0] - p[0];
+    let a1 = 1e9, a2 = -1e9, b1 = 1e9, b2 = -1e9;
+    for (const v of A) { const d = v[0]*ax + v[1]*az; if (d < a1) a1 = d; if (d > a2) a2 = d; }
+    for (const v of B) { const d = v[0]*ax + v[1]*az; if (d < b1) b1 = d; if (d > b2) b2 = d; }
+    if (a2 <= b1 + 1e-6 || b2 <= a1 + 1e-6) return false;
+  }
+  return true;
+}
+function circPoly(px, pz, r, P) {
+  let pos = 0, neg = 0, md = 1e9;
+  for (let i = 0; i < P.length; i++) {
+    const [ax, az] = P[i], [bx, bz] = P[(i + 1) % P.length];
+    const ex = bx - ax, ez = bz - az, cr = ex * (pz - az) - ez * (px - ax);
+    if (cr > 0) pos++; else neg++;
+    const t = Math.max(0, Math.min(1, ((px - ax) * ex + (pz - az) * ez) / (ex*ex + ez*ez)));
+    md = Math.min(md, Math.hypot(px - ax - ex*t, pz - az - ez*t));
+  }
+  return pos === 0 || neg === 0 || md < r;
+}
+const wrap = a => { while (a > PI) a -= 2*PI; while (a < -PI) a += 2*PI; return a; };
+const lat = s => [-Math.sin(s.a), Math.cos(s.a)];
+
+// ---------- game state ----------
+let lvIdx = 0, L = null, world = null, scooters = [], walls = [], own = null, player = null;
+let mode = 'ride', phase = 'menu', grab = null, camMode = 'street';
+let tElapsed = 0, started = false, tipped = 0, holdT = 0, blockT = 0, pending = [], toastT = 0;
+let walkPh = 0, input = { x: 0, y: 0 };
+const camPos = new T.Vector3(0, 8, 12), camLook = new T.Vector3();
+let progress = {};
+try { progress = JSON.parse(localStorage.getItem('jcg-progress') || '{}') || {}; } catch (e) {}
+const saveProgress = () => { try { localStorage.setItem('jcg-progress', JSON.stringify(progress)); } catch (e) {} };
+
+const COLORS = [0xe9e4d6, 0x2b2f38, 0x8a9099, 0xb8322b, 0x3b5d8f, 0xd8c39a, 0x5c6b4e, 0xf0f0f0, 0x6f3f6b, 0x8fb6c9, 0x1f4a44, 0xc96f2e];
+const SHOPS = [['鹹酥雞', '#d93a2b'], ['珍珠奶茶', '#2f7d5b'], ['早餐店', '#e0a524'], ['機車行', '#2b5fa8'], ['藥局', '#2a9a6a'], ['滷味', '#b4442a'],
+  ['雜貨店', '#7a4fa0'], ['麵線', '#c2862c'], ['便當', '#c73a5a'], ['五金行', '#3e6e8e'], ['彩券行', '#d24d2a'], ['水果行', '#5c9a2e']];
+
+function buildLevel(i) {
+  if (world) { scene.remove(world); world.traverse(o => { if (o.geometry && o.geometry !== WHEEL_G) o.geometry.dispose(); }); }
+  lvIdx = i; L = LEVELS[i]; world = new T.Group(); scene.add(world);
+  const n = L.n, rnd = rng(i * 131 + 7);
+  const X0 = -4, X1 = n + 4, Z0 = -6.6, Z1 = 9.2, PX = 48;
+  // ground
+  const gTex = canvasTex((X1 - X0) * PX, (Z1 - Z0) * PX, (g, w, h) => {
+    const X = x => (x - X0) * PX, Z = z => (z - Z0) * PX;
+    g.fillStyle = '#7b4d3c'; g.fillRect(0, 0, w, Z(-2.25));
+    g.strokeStyle = 'rgba(0,0,0,.22)'; g.lineWidth = 1;
+    for (let x = X0; x < X1; x += .3) { g.beginPath(); g.moveTo(X(x), 0); g.lineTo(X(x), Z(-2.25)); g.stroke(); }
+    for (let z = Z0; z < -2.25; z += .3) { g.beginPath(); g.moveTo(0, Z(z)); g.lineTo(w, Z(z)); g.stroke(); }
+    g.fillStyle = '#a49d92'; g.fillRect(0, Z(-2.25), w, Z(0) - Z(-2.25));
+    g.fillStyle = '#26282d'; g.fillRect(0, Z(0), w, Z(8.4) - Z(0));
+    for (let k = 0; k < 2600; k++) { g.fillStyle = `rgba(${rnd() < .5 ? '255,255,255' : '0,0,0'},${.04 + rnd() * .06})`; g.fillRect(rnd() * w, Z(0) + rnd() * (Z(8.4) - Z(0)), 2, 2); }
+    g.fillStyle = '#8f8a80'; g.fillRect(0, Z(8.4), w, h - Z(8.4));
+    // red kerb lines outside the bay zone
+    g.fillStyle = '#c8302a'; g.fillRect(0, Z(.02), X(-.1), 6); g.fillRect(X(n + .1), Z(.02), w - X(n + .1), 6);
+    // bays
+    g.strokeStyle = '#f4f1ea'; g.lineWidth = 4;
+    for (let k = 0; k < n; k++) g.strokeRect(X(k) + 2, Z(-2.2) + 2, PX - 4, Z(0) - Z(-2.2) - 4);
+    g.fillStyle = 'rgba(244,241,234,.9)'; g.font = `900 ${PX * .9}px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    const word = '機車停車格';
+    for (let k = 0; k < word.length; k++) g.fillText(word[k], X(n / 2 - 2.4 + k * 1.2), Z(1.0));
+    // lane centre (double yellow)
+    g.fillStyle = '#e8b830'; g.fillRect(0, Z(6.1), w, 5); g.fillRect(0, Z(6.25), w, 5);
+    for (let x = X0; x < X1; x += 3) { g.fillStyle = 'rgba(244,241,234,.8)'; g.fillRect(X(x), Z(3.4), PX * 1.4, 5); }
+  });
+  const ground = new T.Mesh(new T.PlaneGeometry(X1 - X0, Z1 - Z0), new T.MeshStandardMaterial({ map: gTex, roughness: .92 }));
+  ground.rotation.x = -PI / 2; ground.position.set((X0 + X1) / 2, 0, (Z0 + Z1) / 2); ground.receiveShadow = true; world.add(ground);
+
+  // target highlight
+  const tm = new T.MeshBasicMaterial({ color: 0x3fd1a8, transparent: true, opacity: .35, depthWrite: false });
+  const tgt = new T.Mesh(new T.PlaneGeometry(.94, 2.14), tm); tgt.rotation.x = -PI / 2; tgt.position.set(L.target + .5, .015, -1.1); world.add(tgt);
+  world.userData.tgt = tgt;
+  if (L.need != null) {
+    const arT = canvasTex(64, 128, (g) => { g.fillStyle = '#06231b'; g.beginPath(); g.moveTo(32, 120); g.lineTo(8, 80); g.lineTo(22, 80); g.lineTo(22, 10); g.lineTo(42, 10); g.lineTo(42, 80); g.lineTo(56, 80); g.closePath(); g.fill(); });
+    const ar = new T.Mesh(new T.PlaneGeometry(.45, .9), new T.MeshBasicMaterial({ map: arT, transparent: true, opacity: .55, depthWrite: false }));
+    ar.rotation.x = -PI / 2; ar.position.set(L.target + .5, .02, -1.1); world.add(ar);
+  }
+
+  // arcade: pillars, ceiling, shopfronts, upper facade
+  walls = [];
+  const pillarM = M(0xc9b9a4, .8), ceilM = M(0x4a4038, .9), wallM = M(0x2a2622, .9);
+  for (let x = 0; x <= n; x += 4) {
+    const p = box(.5, 3.2, .4, pillarM, x, 1.6, -2.55, world); p.receiveShadow = true;
+    walls.push({ x: x - .25, z: -2.75, w: .5, d: .4 });
+  }
+  const shopW = 4, shopCount = Math.ceil((X1 - X0) / shopW);
+  const shopTex = canvasTex(shopCount * shopW * 40, 3.2 * 40, (g, w, h) => {
+    for (let k = 0; k < shopCount; k++) {
+      const [nm, col] = SHOPS[(k + i * 3) % SHOPS.length], x = k * 160, open = rnd() < .72;
+      g.fillStyle = col; g.fillRect(x + 2, 0, 156, 30); g.fillStyle = '#fff'; g.font = `900 22px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(nm, x + 80, 16);
+      if (open) { const gr = g.createLinearGradient(0, 30, 0, h); gr.addColorStop(0, '#ffe7b0'); gr.addColorStop(1, '#c98a46'); g.fillStyle = gr; g.fillRect(x + 6, 32, 148, h - 32);
+        g.fillStyle = 'rgba(80,50,30,.5)'; g.fillRect(x + 20, 70, 60, 40); g.fillRect(x + 96, 60, 40, 60); }
+      else { g.fillStyle = '#7f8287'; g.fillRect(x + 6, 32, 148, h - 32); g.strokeStyle = 'rgba(0,0,0,.25)'; for (let y = 36; y < h; y += 5) { g.beginPath(); g.moveTo(x + 6, y); g.lineTo(x + 154, y); g.stroke(); } }
+    }
+  });
+  const shop = new T.Mesh(new T.PlaneGeometry(shopCount * shopW, 3.2), new T.MeshBasicMaterial({ map: shopTex }));
+  shop.position.set(X0 + shopCount * shopW / 2, 1.6, -6.2); world.add(shop);
+  walls.push({ x: X0, z: -7, w: X1 - X0, d: .85 });
+  const ceil = new T.Mesh(new T.PlaneGeometry(X1 - X0, 3.85), ceilM); ceil.rotation.x = PI / 2; ceil.position.set((X0 + X1) / 2, 3.2, -4.3); world.add(ceil);
+  const upTex = canvasTex(shopCount * shopW * 32, 9 * 32, (g, w, h) => {
+    g.fillStyle = '#5d625f'; g.fillRect(0, 0, w, h);
+    for (let k = 0; k < shopCount; k++) {
+      const x = k * 128, tone = ['#6b6f69', '#857a6c', '#5a6470', '#7a6e62', '#6e746a'][k % 5];
+      g.fillStyle = tone; g.fillRect(x, 0, 126, h); g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(x + 126, 0, 2, h);
+      for (let f = 0; f < 3; f++) {
+        const y = h - (f + 1) * 96 + 14;
+        for (const wx of [14, 70]) {
+          const lit = rnd() < .45; g.fillStyle = lit ? '#ffd88a' : '#1d2329'; g.fillRect(x + wx, y, 44, 50);
+          g.strokeStyle = '#2b2b2b'; g.lineWidth = 2; for (let gx = 0; gx <= 44; gx += 8) { g.beginPath(); g.moveTo(x + wx + gx, y - 4); g.lineTo(x + wx + gx, y + 54); g.stroke(); }
+          g.strokeRect(x + wx - 3, y - 4, 50, 58);
+          if (rnd() < .5) { g.fillStyle = '#d9d9d2'; g.fillRect(x + wx + 6, y + 58, 30, 16); }
+        }
+      }
+      if (rnd() < .6) { const [nm, col] = SHOPS[(k * 5 + i) % SHOPS.length]; g.fillStyle = col; g.fillRect(x + 50, 18, 26, 150); g.fillStyle = '#fff'; g.font = `900 20px ${FONT}`; g.textAlign = 'center';
+        for (let c = 0; c < nm.length; c++) g.fillText(nm[c], x + 63, 44 + c * 30); }
+    }
+  });
+  const up = new T.Mesh(new T.PlaneGeometry(shopCount * shopW, 9), new T.MeshStandardMaterial({ map: upTex, roughness: .9, emissive: 0xffffff, emissiveMap: upTex, emissiveIntensity: .25 }));
+  up.position.set(X0 + shopCount * shopW / 2, 7.7, -2.36); world.add(up); world.userData.upper = [up, ceil];
+  // arcade lights
+  for (let x = 2; x < n; x += 6) { const pl = new T.PointLight(0xffc98a, 1.1, 9, 2); pl.position.set(x, 2.9, -4); world.add(pl); }
+  // street lamps
+  for (let x = 1; x < n + 2; x += 9) {
+    box(.12, 6, .12, greyM, x, 3, 8.8, world); box(.12, .12, 1.6, greyM, x, 6, 8.1, world);
+    const lamp = new T.Mesh(new T.BoxGeometry(.3, .1, .5), BASIC(0xffd9a0)); lamp.position.set(x, 5.92, 7.4); world.add(lamp);
+    const sl = new T.PointLight(0xffb870, 1.6, 16, 2); sl.position.set(x, 5.6, 7.2); world.add(sl);
+  }
+  // end barriers + far kerb
+  const barM = M(0xf2f2ee, .6), barR = M(0xd8402c, .6);
+  for (const x of [-1.6, n + 1.6]) {
+    walls.push({ x: x - .2, z: -6.5, w: .4, d: 15 });
+    for (let z = -.6; z < 8.4; z += 1.6) { box(.25, .9, 1.4, (Math.round(z * 10) % 2) ? barM : barR, x, .45, z + .7, world); }
+  }
+  walls.push({ x: X0, z: 8.4, w: X1 - X0, d: .6 });
+
+  // scooters
+  scooters.forEach(s => world.remove(s.mesh.root)); scooters = [];
+  const rs = rng(i * 977 + 3);
+  for (let k = 0; k < n; k++) {
+    if (k === L.target || L.empty.includes(k)) continue;
+    const adj = (L.adj && L.adj[k]) || { dx: 0, da: 0 };
+    addScooter(k + .5 + adj.dx + (rs() - .5) * .08, -1.1 + (rs() - .5) * .08, PI / 2 + adj.da + (rs() - .5) * .06, COLORS[Math.floor(rs() * COLORS.length)], false);
+  }
+  (L.extra || []).forEach(e => addScooter(e.x, e.z, e.a, COLORS[Math.floor(rs() * COLORS.length)], false));
+  own = addScooter(L.start.x, L.start.z, L.start.a, 0x3fd1a8, true);
+
+  // player
+  if (!player) { player = makePerson(); scene.add(player.root); }
+  player.x = own.x; player.z = own.z; player.face = own.a;
+
+  mode = 'ride'; grab = null; tElapsed = 0; started = false; tipped = 0; holdT = 0; blockT = 0; pending = []; toastT = 0;
+  $('toast').hidden = true;
+  $('lvNo').textContent = 'No.' + (i + 1); $('lvName').textContent = L.name;
+  camPos.set(own.x, 9, own.z + 10); camLook.set(own.x, 0, own.z);
+  applyCamVis(); syncUI();
+}
+function addScooter(x, z, a, color, isOwn) {
+  const mesh = makeScooter(color); world.add(mesh.root);
+  const s = { x, z, a, steer: 0, v: 0, tipped: false, fallDir: 1, fall: 0, own: isOwn, mesh };
+  scooters.push(s); return s;
+}
+
+// ---------- collision queries ----------
+function blocker(s, P) {
+  for (const w of walls) if (sat(P, rectPoly(w))) return 'wall';
+  for (const o of scooters) if (o !== s && sat(P, scPoly(o))) return o;
+  return null;
+}
+function playerBlocked(x, z) {
+  for (const w of walls) if (circPoly(x, z, .24, rectPoly(w))) return true;
+  for (const o of scooters) { if (mode === 'ride' && o === own) continue; if (circPoly(x, z, .24, scPoly(o))) return true; }
+  return false;
+}
+
+// ---------- tipping ----------
+function tip(s, dirX, dirZ) {
+  if (s.tipped || (s === own && mode === 'ride')) return;
+  const l = lat(s); s.fallDir = Math.sign(l[0] * dirX + l[1] * dirZ) || 1; s.tipped = true; tipped++;
+  if (grab && grab.s === s) release();
+  showToast(s === own ? '自己架車冧咗！' : '推冧咗人哋架車！'); thud();
+  const P = scPoly(s);
+  for (const o of scooters) if (o !== s && !o.tipped && sat(P, scPoly(o))) pending.push({ s: o, dx: dirX, dz: dirZ, t: .3 });
+}
+function showToast(t) { const el = $('toast'); el.textContent = t; el.hidden = false; toastT = 1.4; }
+
+// ---------- actions ----------
+function nearestGrab() {
+  if (mode !== 'walk') return null;
+  let best = null, bd = .85;
+  for (const s of scooters) {
+    const c = Math.cos(s.a), sn = Math.sin(s.a);
+    if (s.tipped) { const d = Math.hypot(player.x - s.x, player.z - s.z); if (d < 1.4 && d < bd + .6) { best = { s, kind: 'lift' }; bd = d - .6; } continue; }
+    const pts = [['front', .55, .58], ['front', .55, -.58], ['rear', -1.18, 0]];
+    for (const [kind, lx, ly] of pts) {
+      const gx = s.x + c*lx - sn*ly, gz = s.z + sn*lx + c*ly, d = Math.hypot(player.x - gx, player.z - gz);
+      if (d < bd) { bd = d; best = { s, kind, lx, ly }; }
+    }
+  }
+  return best;
+}
+function canMount() { return mode === 'walk' && !own.tipped && Math.hypot(player.x - own.x, player.z - own.z) < 1.3; }
+function toggleRide() {
+  audio();
+  if (phase !== 'play') return;
+  if (mode === 'ride') {
+    if (Math.abs(own.v) > .4) { showToast('停定先落車'); return; }
+    const l = lat(own);
+    for (const side of [1, -1]) {
+      const px = own.x + l[0] * .72 * side, pz = own.z + l[1] * .72 * side;
+      mode = 'walk';
+      if (!playerBlocked(px, pz)) { own.v = 0; player.x = px; player.z = pz; player.face = own.a; syncUI(); return; }
+      mode = 'ride';
+    }
+    showToast('兩邊都冇位落車');
+  } else if (canMount()) {
+    if (grab) release();
+    mode = 'ride'; started = true; syncUI();
+  }
+}
+function toggleGrab() {
+  audio();
+  if (phase !== 'play') return;
+  if (grab) { release(); return; }
+  const g = nearestGrab(); if (!g) return;
+  if (g.kind === 'lift') { g.s.tipped = false; showToast('扶返起身'); syncUI(); return; }
+  grab = g; mode = 'push'; started = true; blockT = 0; syncUI();
+}
+function release() { grab = null; mode = 'walk'; syncUI(); }
+
+// ---------- update ----------
+function step(dt) {
+  const ix = input.x, iy = input.y, m = Math.min(1, Math.hypot(ix, iy));
+  const dx = m > .15 ? ix / Math.hypot(ix, iy) : 0, dz = m > .15 ? -iy / Math.hypot(ix, iy) : 0;
+
+  if (mode === 'ride') {
+    const s = own; let thr = 0, brk = false, steerT = 0;
+    if (m > .15) {
+      const diff = wrap(Math.atan2(dz, dx) - s.a);
+      if (Math.abs(diff) < 1.9) { steerT = Math.max(-.6, Math.min(.6, diff * 1.3)); thr = m; }
+      else { steerT = Math.sign(diff) * .6; thr = m * .45; }
+      started = true;
+    } else brk = true;
+    s.steer += Math.max(-2.5 * dt, Math.min(2.5 * dt, steerT - s.steer));
+    s.v += thr * 3 * dt - (brk ? 5 : .6) * dt; s.v = Math.max(0, Math.min(4.5, s.v));
+    const c = Math.cos(s.a), sn = Math.sin(s.a);
+    const rx = s.x - c*AXO + c*s.v*dt, rz = s.z - sn*AXO + sn*s.v*dt;
+    const na = s.a + s.v / WB * Math.tan(s.steer) * dt;
+    const nx = rx + Math.cos(na)*AXO, nz = rz + Math.sin(na)*AXO;
+    const b = blocker(s, poly(nx, nz, na, HL, HW));
+    if (b) { if (b !== 'wall' && s.v > 1.6) tip(b, c, sn); s.v = 0; }
+    else { s.x = nx; s.z = nz; s.a = na; }
+    player.x = s.x - Math.cos(s.a) * .3; player.z = s.z - Math.sin(s.a) * .3; player.face = s.a;
+  } else if (mode === 'walk') {
+    if (m > .15) {
+      const sp = 1.9 * m * dt, nx = player.x + dx * sp, nz = player.z + dz * sp;
+      if (!playerBlocked(nx, nz)) { player.x = nx; player.z = nz; }
+      else if (!playerBlocked(nx, player.z)) player.x = nx;
+      else if (!playerBlocked(player.x, nz)) player.z = nz;
+      player.face = Math.atan2(dz, dx); walkPh += dt * 9; started = true;
+    }
+  } else if (mode === 'push') {
+    const s = grab.s, c = Math.cos(s.a), sn = Math.sin(s.a);
+    const along = m > .15 ? (dx * c + dz * sn) * m : 0, side = m > .15 ? (c * dz - sn * dx) * m : 0;
+    let nx = s.x, nz = s.z, na = s.a;
+    if (grab.kind === 'front') {
+      s.steer += Math.max(-2 * dt, Math.min(2 * dt, Math.max(-.6, Math.min(.6, side * 1.4)) - s.steer));
+      const v = along * 1.1;
+      const rx = s.x - c*AXO + c*v*dt, rz = s.z - sn*AXO + sn*v*dt;
+      na = s.a + v / WB * Math.tan(s.steer) * dt; nx = rx + Math.cos(na)*AXO; nz = rz + Math.sin(na)*AXO;
+    } else {
+      const v = along * .9, w = -side * .9;
+      const fx = s.x + c*AXO + c*v*dt, fz = s.z + sn*AXO + sn*v*dt;
+      na = s.a + w * dt; nx = fx - Math.cos(na)*AXO; nz = fz - Math.sin(na)*AXO;
+    }
+    if (m > .15) {
+      const b = blocker(s, poly(nx, nz, na, HL, HW));
+      if (b) {
+        blockT += dt;
+        if (b !== 'wall' && blockT > .75) { const mx = nx - s.x, mz = nz - s.z, ml = Math.hypot(mx, mz) || 1; tip(b, mx / ml, mz / ml); blockT = 0; }
+      } else { s.x = nx; s.z = nz; s.a = na; blockT = 0; }
+      walkPh += dt * 6;
+    }
+    if (grab) {
+      const c2 = Math.cos(s.a), s2 = Math.sin(s.a), lx = grab.kind === 'rear' ? -1.22 : .45, ly = grab.kind === 'rear' ? 0 : Math.sign(grab.ly) * .62;
+      player.x = s.x + c2*lx - s2*ly; player.z = s.z + s2*lx + c2*ly; player.face = s.a;
+    }
+  }
+
+  for (const p of pending) p.t -= dt;
+  const due = pending.filter(p => p.t <= 0); pending = pending.filter(p => p.t > 0);
+  due.forEach(p => tip(p.s, p.dx, p.dz));
+}
+
+// ---------- visuals ----------
+function syncMeshes(dt, now) {
+  for (const s of scooters) {
+    const r = s.mesh.root; r.position.set(s.x, 0, s.z); r.rotation.y = -s.a;
+    s.fall += ((s.tipped ? 1 : 0) - s.fall) * Math.min(1, dt * 7);
+    const active = (s === own && mode === 'ride') || (grab && grab.s === s);
+    const kick = active ? 0 : .09;
+    s.mesh.inner.rotation.x = s.fallDir * 1.38 * s.fall + kick * (1 - s.fall);
+    s.mesh.front.rotation.y = -s.steer;
+    if (!active && !s.tipped) s.steer *= Math.max(0, 1 - dt * 2);
+  }
+  const p = player, pr = p.root;
+  pr.position.set(p.x, 0, p.z); pr.rotation.y = -p.face;
+  if (mode === 'ride') {
+    const l = lat(own); pr.position.set(own.x - Math.cos(own.a) * .32, .12, own.z - Math.sin(own.a) * .32);
+    p.legs.forEach(g => g.rotation.z = 1.25); p.arms.forEach(g => g.rotation.z = 1.05);
+  } else {
+    const moving = Math.hypot(input.x, input.y) > .15, sw = moving ? Math.sin(walkPh) * .55 : 0;
+    p.legs[0].rotation.z = sw; p.legs[1].rotation.z = -sw;
+    if (mode === 'push') p.arms.forEach(g => g.rotation.z = 1.2); else { p.arms[0].rotation.z = -sw * .7; p.arms[1].rotation.z = sw * .7; }
+  }
+  // target pulse
+  const st = inTarget(), tm = world.userData.tgt.material;
+  tm.color.set(st === 'in' ? 0x3fd1a8 : st === 'dir' ? 0xffb340 : 0x3fd1a8);
+  tm.opacity = st === 'in' ? .55 : .18 + .14 * Math.sin(now / 260);
+  // camera
+  const f = mode === 'ride' ? own : mode === 'push' ? grab.s : p;
+  const asp = camera.aspect, k = Math.max(1, Math.min(2.1, 1.05 / asp));
+  let want, look;
+  if (camMode === 'street') { const fz = Math.max(-2, Math.min(4, f.z)) * .7; want = new T.Vector3(f.x, 6.4 * k, fz + 7.6 * k); look = new T.Vector3(f.x, .2, fz - .8); }
+  else { const k2 = Math.max(1, Math.min(1.9, .95 / asp)); want = new T.Vector3(f.x, 10.5 * k2, f.z + 1.4); look = new T.Vector3(f.x, 0, f.z); }
+  const a = 1 - Math.exp(-dt * 5); camPos.lerp(want, a); camLook.lerp(look, a);
+  camera.position.copy(camPos); camera.lookAt(camLook);
+  sun.position.set(camLook.x - 6, 14, camLook.z + 8); sun.target.position.copy(camLook);
+}
+function applyCamVis() { if (world) world.userData.upper.forEach(o => o.visible = camMode === 'street'); $('bCam').textContent = camMode === 'street' ? '俯視' : '街景'; }
+
+// ---------- rules ----------
+function inSlotIdx(s, tol = .08) {
+  if (s.tipped) return -1;
+  const P = scPoly(s);
+  let mnx = 1e9, mxx = -1e9, mnz = 1e9, mxz = -1e9;
+  for (const [x, z] of P) { mnx = Math.min(mnx, x); mxx = Math.max(mxx, x); mnz = Math.min(mnz, z); mxz = Math.max(mxz, z); }
+  if (mnz < -SLOT_D - tol || mxz > tol) return -1;
+  const k = Math.floor((mnx + mxx) / 2);
+  return (mnx >= k - tol && mxx <= k + 1 + tol) ? k : -1;
+}
+function inTarget() {
+  if (!own || own.tipped) return 'out';
+  if (inSlotIdx(own, .03) !== L.target) return 'out';
+  if (L.need != null && Math.abs(wrap(own.a - L.need)) > .25) return 'dir';
+  return 'in';
+}
+
+// ---------- UI ----------
+function syncUI() {
+  const rb = $('bRide');
+  if (mode === 'ride') { rb.textContent = '落車'; rb.disabled = false; }
+  else { rb.textContent = '上車'; rb.disabled = !canMount(); }
+  const gb = $('bGrab');
+  if (grab) { gb.textContent = '放手'; gb.disabled = false; }
+  else { const g = nearestGrab(); gb.disabled = !g; gb.textContent = !g ? '推車' : g.kind === 'lift' ? '扶起' : g.kind === 'rear' ? '拉車尾' : '推車頭'; }
+  $('chip').textContent = mode === 'ride' ? '騎緊車' : mode === 'push' ? (grab.kind === 'rear' ? '拉緊車尾' : '推緊車頭') + (grab.s === own ? '（自己架）' : '（人哋架）') : '行路';
+}
+function hintText(st) {
+  if (st === 'in' && mode !== 'ride' && !grab) return ['泊好，停定…', true];
+  if (st === 'in' && mode === 'ride') return ['入咗格，撳「落車」', true];
+  if (st === 'in' && grab) return ['入咗格，撳「放手」', true];
+  if (st === 'dir') return ['入咗格，但車頭要向外（向住馬路）', false];
+  if (mode === 'push') return [grab.kind === 'rear' ? '搖桿推去邊，車尾就擺去邊；前後推就前後移' : '搖桿推去邊，車就向嗰邊推，可以轉車頭', false];
+  if (mode === 'ride' && !started) return ['用搖桿揸車，推去邊就去邊。機車冇倒後', false];
+  return null;
+}
+function updateHUD(dt) {
+  $('sTime').textContent = tElapsed.toFixed(1);
+  $('sTip').textContent = tipped; $('sTipW').classList.toggle('bad', tipped > 0);
+  syncUI();
+  const h = hintText(inTarget()), el = $('hint');
+  if (h) { el.hidden = false; el.textContent = h[0]; el.classList.toggle('good', h[1]); } else el.hidden = true;
+  if (toastT > 0) { toastT -= dt; if (toastT <= 0) $('toast').hidden = true; }
+}
+function layout() {
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  renderer.setSize(w, h, false); camera.aspect = w / Math.max(1, h); camera.updateProjectionMatrix();
+  const hb = $('hud').getBoundingClientRect().bottom - $('app').getBoundingClientRect().top;
+  const ct = $('controls').getBoundingClientRect().top - $('app').getBoundingClientRect().top;
+  $('chip').style.top = (hb - 8) + 'px';
+  $('hint').style.top = Math.max(hb + 22, ct - 48) + 'px';
+}
+
+// ---------- end ----------
+const starStr = n => '★'.repeat(n) + '<s>' + '★'.repeat(3 - n) + '</s>';
+function win() {
+  phase = 'clear'; chime();
+  const blocking = scooters.filter(s => s !== own && inSlotIdx(s) < 0).length;
+  const pen = tipped + blocking, n = pen === 0 && tElapsed <= L.par ? 3 : pen <= 1 ? 2 : 1;
+  const key = 'L' + lvIdx; progress[key] = Math.max(progress[key] || 0, n); saveProgress();
+  const next = lvIdx + 1 < LEVELS.length;
+  showOverlay(`<div class="card res"><h2>泊好！</h2><div class="big">${starStr(n)}</div>
+    <dl><dt>關卡</dt><dd>No.${lvIdx + 1} ${L.name}</dd><dt>時間</dt><dd>${tElapsed.toFixed(1)} s（標準 ${L.par} s）</dd>
+    <dt>推冧</dt><dd>${tipped} 架</dd><dt>出咗格阻人</dt><dd>${blocking} 架</dd></dl>
+    <p class="help" style="margin:0">三星：冇推冧車、人哋架車全部留喺格入面、喺標準時間內。</p>
+    <div class="btns">${next ? '<button class="btn" data-act="next">下一關</button>' : ''}<button class="btn ${next ? 'ghost' : ''}" data-act="retry">再泊一次</button><button class="btn ghost" data-act="menu">選關</button></div></div>`);
+}
+function showMenu() {
+  phase = 'menu';
+  const cards = LEVELS.map((lv, i) => { const open = i === 0 || progress['L' + (i - 1)]; return `<button class="lv" data-lv="${i}" ${open ? '' : 'disabled'}><span class="no">No.${i + 1}</span><span class="nm">${lv.name}</span><span class="st">${open ? starStr(progress['L' + i] || 0) : '未解鎖'}</span></button>`; }).join('');
+  showOverlay(`<div class="card"><div class="brand"><div class="slots"></div><h1>機車格<i>地獄</i></h1>
+    <p>台灣街頭騎樓前嘅機車格，一架貼一架。機車冇倒後，要落車用手推；隔籬泊斜咗，就要幫人擺正。推冧人哋架車會扣分。</p></div>
+    <div class="levels">${cards}</div>
+    <div class="help">手機：左下搖桿推去邊就去邊。右下「落車／上車」同「推車」。行到車頭旁邊撳就推車頭，行到車尾後面撳就拉車尾。<br>
+    <a class="xlink" href="../">→ 玩香港汽車版「窄位泊車王」</a><br>鍵盤：<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 或方向鍵移動、<kbd>F</kbd> 上落車、<kbd>E</kbd> 推車／放手、<kbd>V</kbd> 換鏡頭、<kbd>R</kbd> 重來。</div></div>`);
+}
+function showIntro() {
+  phase = 'intro';
+  showOverlay(`<div class="card res"><div class="brand"><div class="slots"></div></div><h2>No.${lvIdx + 1} ${L.name}</h2><p class="tip">${L.tip}</p>
+    <div class="btns"><button class="btn" data-act="go">出發</button><button class="btn ghost" data-act="menu">選關</button></div></div>`);
+}
+function showOverlay(html) { const o = $('ov'); o.innerHTML = html; o.hidden = false; }
+$('ov').addEventListener('click', e => {
+  audio(); const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.lv != null) { buildLevel(+b.dataset.lv); showIntro(); return; }
+  const a = b.dataset.act;
+  if (a === 'go') { $('ov').hidden = true; phase = 'play'; }
+  if (a === 'retry') { buildLevel(lvIdx); $('ov').hidden = true; phase = 'play'; }
+  if (a === 'next') { buildLevel(lvIdx + 1); showIntro(); }
+  if (a === 'menu') showMenu();
+});
+
+// ---------- audio ----------
+let ac = null;
+function audio() { if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} } if (ac && ac.state === 'suspended') ac.resume(); }
+function thud() {
+  if (!ac) return;
+  const n = ac.sampleRate * .35, buf = ac.createBuffer(1, n, ac.sampleRate), ch = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) ch[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 2.5);
+  const src = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+  f.type = 'lowpass'; f.frequency.value = 900; g.gain.value = .5; src.buffer = buf; src.connect(f).connect(g).connect(ac.destination); src.start();
+}
+function chime() {
+  if (!ac) return;
+  [660, 880, 1320].forEach((fr, i) => { const o = ac.createOscillator(), g = ac.createGain(); o.type = 'triangle'; o.frequency.value = fr;
+    const t0 = ac.currentTime + i * .1; g.gain.setValueAtTime(.08, t0); g.gain.exponentialRampToValueAtTime(.0001, t0 + .4); o.connect(g).connect(ac.destination); o.start(t0); o.stop(t0 + .45); });
+}
+
+// ---------- input ----------
+const keys = {};
+{
+  const joy = $('joy'), knob = $('knob'); let pid = null;
+  const setJ = e => { const r = joy.getBoundingClientRect(), R = r.width / 2; let x = (e.clientX - r.left - R) / R, y = (e.clientY - r.top - R) / R; const l = Math.hypot(x, y); if (l > 1) { x /= l; y /= l; }
+    input.x = x; input.y = -y; knob.style.transform = `translate(${x * R * .55}px,${y * R * .55}px)`; };
+  joy.addEventListener('pointerdown', e => { e.preventDefault(); audio(); pid = e.pointerId; joy.setPointerCapture(pid); setJ(e); });
+  joy.addEventListener('pointermove', e => { if (e.pointerId === pid) setJ(e); });
+  const end = () => { pid = null; input.x = 0; input.y = 0; knob.style.transform = ''; };
+  joy.addEventListener('pointerup', end); joy.addEventListener('pointercancel', end); joy.addEventListener('lostpointercapture', end);
+}
+$('bRide').addEventListener('click', toggleRide);
+$('bGrab').addEventListener('click', toggleGrab);
+$('bCam').addEventListener('click', () => { camMode = camMode === 'street' ? 'top' : 'street'; applyCamVis(); });
+$('bRetry').addEventListener('click', () => { if (!L) return; buildLevel(lvIdx); $('ov').hidden = true; phase = 'play'; });
+$('bMenu').addEventListener('click', showMenu);
+function keyInput() {
+  const x = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0);
+  const y = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0);
+  if (x || y) { input.x = x; input.y = y; input.kb = true; } else if (input.kb) { input.x = 0; input.y = 0; input.kb = false; }
+}
+window.addEventListener('keydown', e => {
+  audio(); if (e.code.startsWith('Arrow') || e.code === 'Space') e.preventDefault(); keys[e.code] = true;
+  if (phase !== 'play' || e.repeat) return;
+  if (e.code === 'KeyF' || e.code === 'Space') toggleRide();
+  if (e.code === 'KeyE') toggleGrab();
+  if (e.code === 'KeyV') $('bCam').click();
+  if (e.code === 'KeyR') $('bRetry').click();
+});
+window.addEventListener('keyup', e => { keys[e.code] = false; });
+window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; input.x = input.y = 0; });
+window.addEventListener('resize', layout);
+
+// ---------- loop ----------
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  keyInput();
+  if (L && phase === 'play') {
+    for (let i = 0; i < 3; i++) step(dt / 3);
+    if (started) tElapsed += dt;
+    updateHUD(dt);
+    if (inTarget() === 'in' && mode !== 'ride' && !grab) { holdT += dt; if (holdT > .6) win(); } else holdT = 0;
+  }
+  if (L) { syncMeshes(dt, now); renderer.render(scene, camera); }
+  requestAnimationFrame(frame);
+}
+
+const boot = () => { layout(); buildLevel(0); showMenu(); layout(); requestAnimationFrame(frame); };
+(document.fonts && document.fonts.ready ? Promise.race([document.fonts.ready, new Promise(r => setTimeout(r, 1500))]) : Promise.resolve()).then(boot);
+})();
+</script>
+</body>
+</html>
