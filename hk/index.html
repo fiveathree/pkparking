@@ -1,0 +1,637 @@
+<!doctype html>
+<html lang="zh-Hant-HK">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>窄位泊車王</title>
+<meta name="description" content="香港式地庫窄位泊車遊戲：右軚自動波，B1 至 B6 六層，有柱位、平排、窄彎同地獄格。">
+<meta name="theme-color" content="#0d0f11">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta property="og:type" content="website">
+<meta property="og:title" content="窄位泊車王">
+<meta property="og:description" content="香港式地庫窄位泊車：右軚自動波，B1 至 B6 六層，柱位、平排、窄彎、地獄格。你泊唔泊得入？">
+<meta property="og:url" content="https://fiveathree.github.io/pkparking/hk/">
+<meta property="og:image" content="https://fiveathree.github.io/pkparking/hk/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:locale" content="zh_HK">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="窄位泊車王">
+<meta name="twitter:description" content="香港式地庫窄位泊車：右軚自動波，六層地獄車場。">
+<meta name="twitter:image" content="https://fiveathree.github.io/pkparking/hk/og-image.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@500;700;900&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none!important}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0}
+/* Layout: full-bleed top-down car park canvas; signage-style HUD strip on top; wheel + gear + pedals overlaid at the bottom */
+:root{
+  --bg:#0d0f11;
+  --panel:#16191c;
+  --line:#2c3035;
+  --ink:#ece7da;
+  --muted:#8e939a;
+  --paint:#f2c53d;
+  --stop:#e5493e;
+  --go:#58c482;
+  --f-display:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-display);overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+#app{position:relative;height:100%;overflow:hidden}
+#cv{position:absolute;inset:0;width:100%;height:100%;display:block}
+button{font-family:inherit;color:inherit;cursor:pointer}
+button:focus-visible{outline:2px solid var(--paint);outline-offset:2px}
+
+/* HUD */
+#hud{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding-block:10px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  background:linear-gradient(var(--bg) 60%,transparent);pointer-events:none}
+#hud > *{pointer-events:auto}
+.floor{display:flex;align-items:center;gap:8px;min-width:0}
+.floor b{font-family:var(--f-mono);font-weight:600;background:var(--paint);color:#14120c;padding:2px 7px;border-radius:3px;font-size:15px}
+.floor span{font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stats{display:flex;gap:12px;font-family:var(--f-mono);font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.stats em{font-style:normal;color:var(--ink)}
+.stats .bad em{color:var(--stop)}
+.tools{margin-left:auto;display:flex;gap:6px}
+.tools button{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:5px 9px;font-size:13px;font-weight:700}
+#sensors{position:absolute;left:50%;transform:translateX(-50%);display:flex;gap:6px;pointer-events:none;font-family:var(--f-mono);font-size:12px}
+.sens{background:rgba(13,15,17,.82);border:1px solid var(--line);border-radius:4px;padding:3px 8px;display:flex;gap:6px;align-items:center;font-variant-numeric:tabular-nums}
+.sens i{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+#hint{position:absolute;left:50%;transform:translateX(-50%);pointer-events:none;background:var(--paint);color:#14120c;font-weight:900;padding:6px 14px;border-radius:4px;font-size:14px;white-space:nowrap}
+
+/* Controls */
+#controls{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:space-between;align-items:flex-end;gap:12px;
+  padding-block:0 14px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));pointer-events:none}
+#controls > *{pointer-events:auto}
+.wheelbox{display:flex;flex-direction:column;align-items:center;gap:6px}
+#wheel{width:132px;height:132px;border-radius:50%;touch-action:none;position:relative}
+#wheel svg{width:100%;height:100%;display:block}
+.wheelrow{display:flex;gap:8px;align-items:center;font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.wheelrow button{background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:3px 9px;font-size:12px;font-weight:700}
+.rightctl{display:flex;gap:10px;align-items:flex-end}
+.gears{display:flex;flex-direction:column;gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:5px}
+.gears button{width:40px;height:32px;border:0;border-radius:5px;background:transparent;font-family:var(--f-mono);font-weight:600;font-size:16px;color:var(--muted)}
+.gears button.on{background:var(--paint);color:#14120c}
+.gears button.on[data-g="R"]{background:var(--stop);color:#fff}
+.pedal{border:1px solid var(--line);border-radius:10px;background:repeating-linear-gradient(0deg,#22262a 0 6px,#1a1d20 6px 10px);touch-action:none;
+  display:flex;align-items:flex-end;justify-content:center;padding-bottom:8px;font-weight:900;font-size:14px;color:var(--muted)}
+#brake{width:66px;height:86px}
+#gas{width:54px;height:112px}
+.pedal.on{border-color:var(--paint);color:var(--ink);background:repeating-linear-gradient(0deg,#3a3420 0 6px,#2a261a 6px 10px)}
+#brake.on{border-color:var(--stop)}
+@media (orientation:landscape) and (max-height:520px){
+  #wheel{width:112px;height:112px}
+  #gas{height:96px}#brake{height:74px}
+}
+
+/* Overlays */
+.overlay{position:absolute;inset:0;background:rgba(9,10,12,.86);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;
+  padding-block:24px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));overflow:auto;z-index:5}
+.card{width:100%;max-width:560px;display:flex;flex-direction:column;gap:18px;margin:auto}
+.brand{display:flex;flex-direction:column;gap:6px}
+.brand .stripe{height:10px;background:repeating-linear-gradient(-45deg,var(--paint) 0 12px,#111 12px 24px);border-radius:2px}
+.brand h1{margin:0;font-weight:900;font-size:clamp(40px,11vw,68px);letter-spacing:.04em;line-height:1.05;text-wrap:balance}
+.brand p{margin:0;color:var(--muted);font-size:15px;line-height:1.6}
+.levels{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+@media (min-width:520px){.levels{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.lv{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px;text-align:left;display:flex;flex-direction:column;gap:6px;min-width:0}
+.lv:hover:not(:disabled){border-color:var(--paint)}
+.lv:disabled{opacity:.4;cursor:not-allowed}
+.lv .code{font-family:var(--f-mono);font-weight:600;font-size:22px;color:var(--paint)}
+.lv .nm{font-weight:700;font-size:15px}
+.lv .st{font-size:14px;letter-spacing:2px;color:var(--paint)}
+.lv .st s{text-decoration:none;color:var(--line)}
+.help{font-size:13px;color:var(--muted);line-height:1.7;border-top:1px solid var(--line);padding-top:12px}
+.help kbd{font-family:var(--f-mono);background:var(--panel);border:1px solid var(--line);border-radius:3px;padding:0 5px;color:var(--ink);font-size:12px}
+.result h2{margin:0;font-size:40px;font-weight:900}
+.result .big{font-size:40px;letter-spacing:6px;color:var(--paint)}
+.result .big s{text-decoration:none;color:var(--line)}
+.result dl{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;margin:0;font-size:15px}
+.result dt{color:var(--muted)}
+.result dd{margin:0;font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.btns{display:flex;gap:10px;flex-wrap:wrap}
+.btn{border:0;border-radius:6px;padding:12px 18px;font-weight:900;font-size:16px;background:var(--paint);color:#14120c}
+.btn.ghost{background:var(--panel);color:var(--ink);border:1px solid var(--line)}
+.tipline{background:var(--panel);border-left:4px solid var(--paint);padding:10px 12px;font-size:14px;line-height:1.6}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="cv"></canvas>
+
+  <div id="hud">
+    <div class="floor"><b id="lvCode">B1</b><span id="lvName">午夜地庫</span></div>
+    <div class="stats">
+      <span>時間 <em id="tTime">0.0</em>s</span>
+      <span id="hitWrap">花痕 <em id="tHits">0</em>/5</span>
+      <span><em id="tSpd">0</em> km/h</span>
+    </div>
+    <div class="tools">
+      <button id="bCam" title="切換鏡頭">近鏡</button>
+      <button id="bSnd" title="雷達聲">聲 開</button>
+      <button id="bRetry" title="重新開始">重來</button>
+      <button id="bMenu" title="選擇樓層">選關</button>
+    </div>
+  </div>
+  <div id="sensors"><div class="sens"><i id="sF"></i>車頭 <span id="dF">--</span></div><div class="sens"><i id="sR"></i>車尾 <span id="dR">--</span></div></div>
+  <div id="hint" hidden></div>
+
+  <div id="controls">
+    <div class="wheelbox">
+      <div id="wheel" aria-label="軚盤">
+        <svg viewBox="0 0 100 100" aria-hidden="true">
+          <circle cx="50" cy="50" r="44" fill="none" stroke="#2b2f34" stroke-width="10"/>
+          <circle cx="50" cy="50" r="44" fill="none" stroke="#3b4046" stroke-width="2"/>
+          <rect x="47" y="2" width="6" height="12" rx="2" fill="#f2c53d"/>
+          <path d="M8 54 Q50 40 92 54" fill="none" stroke="#2b2f34" stroke-width="9"/>
+          <path d="M50 52 L50 92" stroke="#2b2f34" stroke-width="9"/>
+          <circle cx="50" cy="52" r="13" fill="#1d2024" stroke="#3b4046" stroke-width="2"/>
+        </svg>
+      </div>
+      <div class="wheelrow"><span id="tWheel">軚 0°</span><button id="bCenter">回正</button></div>
+    </div>
+    <div class="rightctl">
+      <div class="gears" id="gears">
+        <button data-g="P" class="on">P</button>
+        <button data-g="R">R</button>
+        <button data-g="N">N</button>
+        <button data-g="D">D</button>
+      </div>
+      <div class="pedal" id="brake">煞車</div>
+      <div class="pedal" id="gas">油</div>
+    </div>
+  </div>
+
+  <div class="overlay" id="ov"></div>
+</div>
+
+<script>
+(() => {
+'use strict';
+// ---------- constants (meters, seconds) ----------
+const WB = 2.7, CAR_L = 4.6, CAR_W = 1.8, AX = 1.35;
+const MAXS = 35 * Math.PI / 180, LOCK = 540, CREEP = 0.55, MAX_HITS = 5;
+const PI = Math.PI;
+
+// ---------- level builders ----------
+const R = (x, y, w, h, t = 'wall', extra) => Object.assign({ x, y, w, h, t }, extra || {});
+const border = (W, H) => { const t = .5; return [R(0,0,W,t), R(0,H-t,W,t), R(0,0,t,H), R(W-t,0,t,H)]; };
+const row = (x0, y0, w, h, n, m) => Array.from({ length: n }, (_, i) => ({ x: x0 + i * w, y: y0, w, h, m }));
+function parkIn(s, seed, wmax = 1.84) {
+  const L = 4.5;
+  if (s.m !== 'P') { const w = Math.min(wmax, s.w - 0.42); return R(s.x + (s.w - w) / 2, s.y + (s.h - L) / 2, w, L, 'car', { seed }); }
+  const h = Math.min(wmax, s.h - 0.4); return R(s.x + (s.w - L) / 2, s.y + (s.h - h) / 2, L, h, 'car', { seed });
+}
+const fill = (obs, slots, idx, base, w) => idx.forEach(i => obs.push(parkIn(slots[i], base + i, w)));
+
+const LEVELS = [
+  () => { const W = 22.5, H = 17.5, top = row(1,.5,2.6,5,8,'S'), bot = row(1,12,2.6,5,8,'N');
+    const obs = border(W, H); fill(obs, top, [0,1,2,3,5,6], 1); fill(obs, bot, [0,1,3,4,5,7], 20);
+    return { code:'B1', name:'午夜地庫', W, H, slots:[...top,...bot], target: top[4], obs, start:{x:3.5,y:8.75,a:0}, needA:null, par:45,
+      tip:'熱身：沿車路開，打軚車頭直入亮咗嘅車位。車位 2.6 米闊，6.5 米車路，算闊落。', arrows:[[11,8.75,0]] }; },
+  () => { const W = 24, H = 17.5, top = row(1,.5,2.5,5,9,'S'), bot = row(1,12,2.5,5,9,'N');
+    const obs = border(W, H); fill(obs, top, [0,1,2,3,4,6,7,8], 3); fill(obs, bot, [0,2,3,4,6,7,8], 30);
+    return { code:'B2', name:'倒泊入格', W, H, slots:[...top,...bot], target: top[5], obs, start:{x:4.5,y:8.75,a:0}, needA: PI/2, par:60,
+      tip:'要車頭向外。先開過車位，掛 R 倒入，跟住後面嗰兩條輔助線。', arrows:[[11,8.75,0]] }; },
+  () => { const W = 22, H = 16.5, top = row(1,.5,2.5,5,8,'S'), bot = row(1,11,2.5,5,8,'N');
+    const obs = border(W, H); obs.push(R(21,.5,.5,5));
+    obs.push(R(8.2,4.5,.6,.6,'pillar'), R(15.7,4.5,.6,.6,'pillar'), R(5.7,10.9,.6,.6,'pillar'), R(13.2,10.9,.6,.6,'pillar'));
+    fill(obs, top, [0,1,2,4,5,6,7], 5); fill(obs, bot, [1,2,3,5,6,7], 40);
+    return { code:'B3', name:'柱位夾縫', W, H, slots:[...top,...bot], target: top[3], obs, start:{x:3,y:8.25,a:0}, needA:null, par:60,
+      tip:'車位口左邊有條柱食咗 30 厘米。入位要貼右，車身全部喺白線入面先算。', arrows:[[12,8.25,0]] }; },
+  () => { const W = 26, H = 10.5;
+    const slots = [{x:1,y:1,w:5.6,h:2.4,m:'P'},{x:6.6,y:1,w:5.6,h:2.4,m:'P'},{x:12.2,y:1,w:6.2,h:2.4,m:'P'},{x:18.4,y:1,w:5.6,h:2.4,m:'P'}];
+    const obs = border(W, H); obs.push(R(.5,.5,25,.5,'kerb'), R(.5,9.3,25,.7,'kerb'));
+    fill(obs, slots, [0,1,3], 7);
+    return { code:'B4', name:'路邊平排', W, H, slots, target: slots[2], obs, start:{x:4,y:6.4,a:0}, needA:null, par:70,
+      tip:'平排泊車：開到同前車並排，掛 R 打盡軚倒入，車尾入咗一半就回軚再反方向打。', arrows:[] }; },
+  () => { const W = 24, H = 18, top = row(6.5,2,2.5,5,6,'S');
+    const obs = border(W, H);
+    obs.push(R(.5,.5,5.5,6.5), R(6,.5,17.5,1.5), R(6,2,.5,5), R(21.5,2,2,5), R(5,11.5,18.5,6));
+    fill(obs, top, [0,1,2,3,5], 9);
+    return { code:'B5', name:'工廈窄彎', W, H, slots: top, target: top[4], obs, start:{x:2.75,y:15,a:-PI/2}, needA:null, par:80,
+      tip:'4.5 米窄車路加 90 度彎。轉彎前靠外行，唔夠位就前後搓幾次。', arrows:[[2.75,9.5,-PI/2],[11,9.25,0]], mirror:[5.15,11.35] }; },
+  () => { const W = 20, H = 13, top = row(1,.5,2.3,5,8,'S');
+    const obs = border(W, H); obs.push(R(.5,11,19,1.5));
+    obs.push(R(7.65,4.5,.5,.6,'pillar'), R(4.4,10.4,.6,.6,'pillar'), R(11.4,10.4,.6,.6,'pillar'), R(16,10.4,.6,.6,'pillar'));
+    fill(obs, top, [0,1,2,4,5,6,7], 11, 1.78);
+    return { code:'B6', name:'地獄格', W, H, slots: top, target: top[3], obs, start:{x:3,y:8,a:0}, needA: PI/2, par:100,
+      tip:'2.3 米窄格、柱位、5.5 米車路，仲要倒泊車頭向外。慢慢嚟，一寸一寸搓。', arrows:[] }; },
+];
+
+// ---------- state ----------
+const $ = id => document.getElementById(id);
+const cv = $('cv'), ctx = cv.getContext('2d');
+let lvIdx = 0, L = null, car = null, mode = 'menu';
+let gear = 'P', wheel = 0, gas = false, brake = false;
+let tElapsed = 0, started = false, hits = 0, contact = false, holdT = 0, shake = 0, flash = 0;
+let camMode = 'fit', camX = 0, camY = 0, soundOn = true;
+const keys = {};
+let progress = {};
+try { progress = JSON.parse(localStorage.getItem('zwp-progress') || '{}') || {}; } catch (e) { progress = {}; }
+const saveProgress = () => { try { localStorage.setItem('zwp-progress', JSON.stringify(progress)); } catch (e) {} };
+
+function loadLevel(i) {
+  lvIdx = i; L = LEVELS[i]();
+  car = { x: L.start.x, y: L.start.y, a: L.start.a, v: 0 };
+  gear = 'P'; wheel = 0; gas = brake = false; tElapsed = 0; started = false; hits = 0; contact = false; holdT = 0; shake = 0; flash = 0;
+  camX = car.x; camY = car.y;
+  $('lvCode').textContent = L.code; $('lvName').textContent = L.name;
+  setGearUI(); mode = 'play'; $('ov').hidden = true; layout();
+}
+
+// ---------- geometry ----------
+function corners(x, y, a, hl = CAR_L / 2, hw = CAR_W / 2) {
+  const c = Math.cos(a), s = Math.sin(a);
+  return [[x + c*hl - s*hw, y + s*hl + c*hw], [x + c*hl + s*hw, y + s*hl - c*hw], [x - c*hl + s*hw, y - s*hl - c*hw], [x - c*hl - s*hw, y - s*hl + c*hw]];
+}
+function hitRect(P, r) {
+  let mnx = 1e9, mxx = -1e9, mny = 1e9, mxy = -1e9;
+  for (const p of P) { mnx = Math.min(mnx, p[0]); mxx = Math.max(mxx, p[0]); mny = Math.min(mny, p[1]); mxy = Math.max(mxy, p[1]); }
+  if (mxx <= r.x || mnx >= r.x + r.w || mxy <= r.y || mny >= r.y + r.h) return false;
+  const Q = [[r.x, r.y], [r.x + r.w, r.y], [r.x + r.w, r.y + r.h], [r.x, r.y + r.h]];
+  const axes = [[P[0][0] - P[3][0], P[0][1] - P[3][1]], [P[0][0] - P[1][0], P[0][1] - P[1][1]]];
+  for (const [ax, ay] of axes) {
+    let a1 = 1e9, a2 = -1e9, b1 = 1e9, b2 = -1e9;
+    for (const p of P) { const d = p[0]*ax + p[1]*ay; a1 = Math.min(a1, d); a2 = Math.max(a2, d); }
+    for (const p of Q) { const d = p[0]*ax + p[1]*ay; b1 = Math.min(b1, d); b2 = Math.max(b2, d); }
+    if (a2 <= b1 || b2 <= a1) return false;
+  }
+  return true;
+}
+const collides = (x, y, a) => { const P = corners(x, y, a); return L.obs.some(r => hitRect(P, r)); };
+const ptDist = (px, py, r) => Math.hypot(Math.max(r.x - px, 0, px - r.x - r.w), Math.max(r.y - py, 0, py - r.y - r.h));
+function sensor(front) {
+  const c = Math.cos(car.a), s = Math.sin(car.a), lx = front ? CAR_L/2 : -CAR_L/2; let best = 9;
+  for (const ly of [-.8, 0, .8]) { const px = car.x + c*lx - s*ly, py = car.y + s*lx + c*ly; for (const r of L.obs) best = Math.min(best, ptDist(px, py, r)); }
+  return best;
+}
+const wrap = a => { while (a > PI) a -= 2*PI; while (a < -PI) a += 2*PI; return a; };
+function inTarget() {
+  const t = L.target, e = .02;
+  const ok = corners(car.x, car.y, car.a).every(([x, y]) => x >= t.x - e && x <= t.x + t.w + e && y >= t.y - e && y <= t.y + t.h + e);
+  if (!ok) return 'out';
+  if (L.needA != null && Math.abs(wrap(car.a - L.needA)) > .2) return 'dir';
+  return 'in';
+}
+
+// ---------- physics ----------
+const approach = (v, t, d) => v < t ? Math.min(v + d, t) : Math.max(v - d, t);
+function step(dt) {
+  const steerKey = (keys.ArrowLeft || keys.KeyA ? -1 : 0) + (keys.ArrowRight || keys.KeyD ? 1 : 0);
+  if (steerKey) setWheel(wheel + steerKey * 420 * dt);
+  const g = gas || keys.ArrowUp || keys.KeyW, b = brake || keys.ArrowDown || keys.KeyS || keys.Space;
+  const dir = gear === 'D' ? 1 : gear === 'R' ? -1 : 0;
+  if (gear === 'P') car.v = approach(car.v, 0, 12 * dt);
+  else if (!dir) car.v = approach(car.v, 0, .6 * dt);
+  else {
+    const s = car.v * dir, target = g ? (dir > 0 ? 5 : 2.5) : CREEP;
+    let ns;
+    if (s < 0) ns = Math.min(s + 3 * dt, target);
+    else if (s < target) ns = Math.min(s + (g ? 2.6 : 1.0) * dt, target);
+    else ns = Math.max(s - .8 * dt, target);
+    car.v = ns * dir;
+  }
+  if (b) car.v = approach(car.v, 0, 7 * dt);
+  if ((g || Math.abs(car.v) > .01) && dir) started = true;
+
+  const d = wheel / LOCK * MAXS, c = Math.cos(car.a), s = Math.sin(car.a);
+  let rx = car.x - c*AX, ry = car.y - s*AX;
+  rx += car.v * dt * c; ry += car.v * dt * s;
+  const na = car.a + car.v / WB * Math.tan(d) * dt;
+  const nx = rx + Math.cos(na)*AX, ny = ry + Math.sin(na)*AX;
+  if (collides(nx, ny, na)) {
+    if (!contact && Math.abs(car.v) > .05) {
+      hits++; shake = .35; flash = .5; crunch(Math.abs(car.v));
+      if (hits >= MAX_HITS) { car.v = 0; endFail(); }
+    }
+    contact = true; car.v = 0;
+  } else { car.x = nx; car.y = ny; car.a = na; contact = false; }
+}
+
+// ---------- audio ----------
+let ac = null, beepT = 0;
+function audio() { if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} } if (ac && ac.state === 'suspended') ac.resume(); }
+function beep(f, dur, vol = .06) {
+  if (!ac || !soundOn) return;
+  const o = ac.createOscillator(), g = ac.createGain(); o.type = 'square'; o.frequency.value = f;
+  g.gain.setValueAtTime(vol, ac.currentTime); g.gain.exponentialRampToValueAtTime(.0001, ac.currentTime + dur);
+  o.connect(g).connect(ac.destination); o.start(); o.stop(ac.currentTime + dur + .02);
+}
+function crunch(sp) {
+  if (!ac || !soundOn) return;
+  const n = ac.sampleRate * .25, buf = ac.createBuffer(1, n, ac.sampleRate), ch = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) ch[i] = (Math.random()*2 - 1) * Math.pow(1 - i/n, 3);
+  const src = ac.createBufferSource(), g = ac.createGain(), f = ac.createBiquadFilter();
+  f.type = 'lowpass'; f.frequency.value = 1400; g.gain.value = Math.min(.5, .2 + sp * .2);
+  src.buffer = buf; src.connect(f).connect(g).connect(ac.destination); src.start();
+}
+
+// ---------- camera / layout ----------
+let dpr = 1, view = { s: 20, ox: 0, oy: 0 }, availTop = 0, availBot = 0;
+function layout() {
+  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = cv.clientWidth, h = cv.clientHeight;
+  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+  const hb = $('hud').getBoundingClientRect().bottom - $('app').getBoundingClientRect().top;
+  const ct = $('controls').getBoundingClientRect().top - $('app').getBoundingClientRect().top;
+  availTop = hb + 30;
+  availBot = (w > h * 1.15) ? h - 8 : ct - 6;
+  if (availBot - availTop < 160) { availTop = hb; availBot = h; }
+  $('sensors').style.top = (hb + 2) + 'px';
+  $('hint').style.top = (availBot - 40) + 'px';
+}
+function computeView() {
+  const w = cv.clientWidth, ah = availBot - availTop;
+  const fit = Math.min((w - 16) / L.W, ah / L.H);
+  if (camMode === 'fit') view = { s: fit, ox: (w - L.W * fit) / 2, oy: availTop + (ah - L.H * fit) / 2 };
+  else {
+    const s = Math.max(fit * 2.1, 30);
+    camX += (car.x - camX) * .12; camY += (car.y - camY) * .12;
+    view = { s, ox: w / 2 - camX * s, oy: availTop + ah / 2 - camY * s };
+  }
+}
+
+// ---------- drawing ----------
+function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const CAR_COLORS = ['#5b6670','#8a8f96','#2f3a4a','#6e2e2e','#c9c5bb','#3d4a3a','#23272c','#7a6a4f','#41556b','#b0a68f'];
+
+function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); }
+function drawCar(cx, cy, a, body, roof, delta, player) {
+  ctx.save(); ctx.translate(cx, cy); ctx.rotate(a);
+  const hl = 2.3, hw = .9;
+  // shadow
+  ctx.fillStyle = 'rgba(0,0,0,.45)'; rr(-hl + .08, -hw + .12, CAR_L, CAR_W, .4); ctx.fill();
+  // wheels
+  ctx.fillStyle = '#0a0a0a';
+  for (const [wx, steer] of [[-AX, 0], [AX, delta]]) for (const wy of [-.82, .82]) {
+    ctx.save(); ctx.translate(wx, wy); ctx.rotate(steer); ctx.fillRect(-.33, -.12, .66, .24); ctx.restore();
+  }
+  // body
+  ctx.fillStyle = body; rr(-hl, -hw, CAR_L, CAR_W, .38); ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = .05; ctx.stroke();
+  // mirrors
+  ctx.fillStyle = body; ctx.fillRect(.7, -hw - .16, .22, .18); ctx.fillRect(.7, hw - .02, .22, .18);
+  // cabin
+  ctx.fillStyle = roof; rr(-1.15, -.72, 2.05, 1.44, .25); ctx.fill();
+  ctx.fillStyle = 'rgba(20,28,36,.85)'; rr(.55, -.7, .5, 1.4, .12); ctx.fill(); rr(-1.35, -.66, .3, 1.32, .1); ctx.fill();
+  // lights
+  ctx.fillStyle = player ? '#fff6d5' : '#d9d4c3'; ctx.fillRect(2.18, -.78, .1, .34); ctx.fillRect(2.18, .44, .1, .34);
+  ctx.fillStyle = player && gear === 'R' ? '#ffffff' : (player && (brake || keys.Space || keys.ArrowDown || keys.KeyS) ? '#ff3b2f' : '#7a1d18');
+  ctx.fillRect(-2.28, -.8, .1, .36); ctx.fillRect(-2.28, .44, .1, .36);
+  if (player) {
+    // roof sign + right-hand-drive wheel
+    ctx.fillStyle = '#f7efd6'; ctx.fillRect(-.35, -.28, .32, .56);
+    ctx.strokeStyle = '#111'; ctx.lineWidth = .06; ctx.beginPath(); ctx.arc(.38, .38, .16, 0, PI*2); ctx.stroke();
+  }
+  ctx.restore();
+}
+function worldText(t, x, y, size, color, align = 'center', rot = 0) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.scale(.05, .05);
+  ctx.font = `900 ${size * 20}px "Noto Sans TC", sans-serif`; ctx.textAlign = align; ctx.textBaseline = 'middle';
+  ctx.fillStyle = color; ctx.fillText(t, 0, 0); ctx.restore();
+}
+function hazard(r) {
+  ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
+  ctx.fillStyle = '#f2c53d'; ctx.fillRect(r.x, r.y, r.w, r.h);
+  ctx.strokeStyle = '#141414'; ctx.lineWidth = .14;
+  for (let k = -r.h; k < r.w + r.h; k += .32) { ctx.beginPath(); ctx.moveTo(r.x + k, r.y); ctx.lineTo(r.x + k - r.h, r.y + r.h); ctx.stroke(); }
+  ctx.restore();
+  ctx.fillStyle = '#6d6f72'; ctx.fillRect(r.x + .1, r.y + .1, r.w - .2, r.h - .2);
+}
+function slotLines(s) {
+  ctx.strokeStyle = 'rgba(236,231,218,.78)'; ctx.lineWidth = .12; ctx.beginPath();
+  if (s.m === 'S' || s.m === 'N') {
+    ctx.moveTo(s.x, s.y); ctx.lineTo(s.x, s.y + s.h); ctx.moveTo(s.x + s.w, s.y); ctx.lineTo(s.x + s.w, s.y + s.h);
+    const by = s.m === 'S' ? s.y : s.y + s.h; ctx.moveTo(s.x, by); ctx.lineTo(s.x + s.w, by);
+  } else {
+    for (const [x, y, dx, dy] of [[s.x, s.y + s.h, .6, 0], [s.x + s.w, s.y + s.h, -.6, 0], [s.x, s.y + s.h, 0, -.6], [s.x + s.w, s.y + s.h, 0, -.6]]) { ctx.moveTo(x, y); ctx.lineTo(x + dx, y + dy); }
+  }
+  ctx.stroke();
+}
+function arrow(x, y, a, len, color) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(a); ctx.fillStyle = color;
+  ctx.beginPath(); ctx.moveTo(-len/2, -.18); ctx.lineTo(len/2 - .7, -.18); ctx.lineTo(len/2 - .7, -.5); ctx.lineTo(len/2, 0); ctx.lineTo(len/2 - .7, .5); ctx.lineTo(len/2 - .7, .18); ctx.lineTo(-len/2, .18); ctx.closePath(); ctx.fill(); ctx.restore();
+}
+function guide(now) {
+  const dir = gear === 'D' ? 1 : gear === 'R' ? -1 : 0; if (!dir) return;
+  const d = wheel / LOCK * MAXS;
+  let x = car.x, y = car.y, a = car.a; const lx = dir > 0 ? 2.3 : -2.3;
+  const ptsL = [], ptsR = [];
+  for (let i = 0; i <= 40; i++) {
+    const c = Math.cos(a), s = Math.sin(a);
+    ptsL.push([x + c*lx - s*(-.9), y + s*lx + c*(-.9)]); ptsR.push([x + c*lx - s*.9, y + s*lx + c*.9]);
+    let rx = x - c*AX, ry = y - s*AX; rx += .1*dir*c; ry += .1*dir*s; a += .1*dir/WB*Math.tan(d); x = rx + Math.cos(a)*AX; y = ry + Math.sin(a)*AX;
+  }
+  ctx.lineWidth = .09; ctx.lineCap = 'round';
+  for (const pts of [ptsL, ptsR]) for (let i = 0; i < 40; i++) {
+    const m = i / 10; ctx.strokeStyle = m < 1 ? 'rgba(229,73,62,.95)' : m < 2 ? 'rgba(242,197,61,.85)' : 'rgba(88,196,130,.6)';
+    ctx.beginPath(); ctx.moveTo(pts[i][0], pts[i][1]); ctx.lineTo(pts[i+1][0], pts[i+1][1]); ctx.stroke();
+  }
+  for (const k of [10, 20]) { ctx.strokeStyle = k === 10 ? 'rgba(229,73,62,.9)' : 'rgba(242,197,61,.8)'; ctx.beginPath(); ctx.moveTo(ptsL[k][0], ptsL[k][1]); ctx.lineTo(ptsR[k][0], ptsR[k][1]); ctx.stroke(); }
+}
+
+function render(now) {
+  const W = cv.clientWidth, H = cv.clientHeight;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = '#0d0f11'; ctx.fillRect(0, 0, W, H);
+  if (!L) return;
+  computeView();
+  let sx = 0, sy = 0; if (shake > 0) { sx = (Math.random() - .5) * 10 * shake; sy = (Math.random() - .5) * 10 * shake; }
+  ctx.setTransform(dpr * view.s, 0, 0, dpr * view.s, dpr * (view.ox + sx), dpr * (view.oy + sy));
+
+  // floor
+  ctx.fillStyle = '#3a3d40'; ctx.fillRect(0, 0, L.W, L.H);
+  const rnd = rng(lvIdx * 97 + 11);
+  for (let i = 0; i < 26; i++) {
+    const x = rnd() * L.W, y = rnd() * L.H, r = .6 + rnd() * 2.2;
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, `rgba(0,0,0,${.12 + rnd() * .14})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g; ctx.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+  // painted code + arrows
+  worldText(L.code, L.W - 2.2, L.H - 2.6, 2.4, 'rgba(242,197,61,.16)');
+  for (const [x, y, a] of L.arrows) arrow(x, y, a, 3, 'rgba(236,231,218,.22)');
+  // slots
+  for (const s of L.slots) slotLines(s);
+  // target
+  const t = L.target, pulse = .35 + .25 * Math.sin(now / 260), st = mode === 'play' ? inTarget() : 'out';
+  ctx.fillStyle = st === 'in' ? `rgba(88,196,130,${pulse})` : `rgba(242,197,61,${pulse * .55})`; ctx.fillRect(t.x, t.y, t.w, t.h);
+  ctx.setLineDash([.4, .3]); ctx.strokeStyle = st === 'in' ? '#58c482' : '#f2c53d'; ctx.lineWidth = .1; ctx.strokeRect(t.x + .05, t.y + .05, t.w - .1, t.h - .1); ctx.setLineDash([]);
+  if (L.needA != null) { arrow(t.x + t.w/2, t.y + t.h/2, L.needA, 2.4, 'rgba(20,18,12,.55)'); worldText('車頭向外', t.x + t.w/2, t.y + 1, .5, 'rgba(20,18,12,.75)'); }
+  else worldText('P', t.x + t.w/2, t.y + t.h/2, 1.6, 'rgba(20,18,12,.45)');
+  // obstacles
+  for (const r of L.obs) {
+    if (r.t === 'wall') { ctx.fillStyle = '#1b1e21'; ctx.fillRect(r.x, r.y, r.w, r.h); ctx.strokeStyle = '#2b2f34'; ctx.lineWidth = .08; ctx.strokeRect(r.x, r.y, r.w, r.h); }
+    else if (r.t === 'kerb') { ctx.fillStyle = '#1b1e21'; ctx.fillRect(r.x, r.y, r.w, r.h); ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
+      for (let x = r.x; x < r.x + r.w; x += 1) { ctx.fillStyle = (Math.round(x) % 2) ? '#f2c53d' : '#e9e4d6'; ctx.fillRect(x, r.y + (r.y < 2 ? r.h - .2 : 0), 1, .2); } ctx.restore(); }
+    else if (r.t === 'pillar') hazard(r);
+  }
+  if (L.mirror) { const [mx, my] = L.mirror; ctx.fillStyle = '#f29a3d'; ctx.beginPath(); ctx.arc(mx, my, .45, 0, PI*2); ctx.fill(); ctx.fillStyle = '#9fb2c2'; ctx.beginPath(); ctx.arc(mx, my, .32, 0, PI*2); ctx.fill(); }
+  for (const r of L.obs) if (r.t === 'car') {
+    const rr2 = rng(r.seed * 31 + 7), col = CAR_COLORS[Math.floor(rr2() * CAR_COLORS.length)], flip = rr2() < .5;
+    const vert = r.h > r.w, a = vert ? (flip ? -PI/2 : PI/2) : (flip ? 0 : PI);
+    drawCar(r.x + r.w/2, r.y + r.h/2, a, col, shade(col), 0, false);
+  }
+  // guide + player
+  if (mode === 'play') guide(now);
+  drawCar(car.x, car.y, car.a, '#c4322a', '#e9dfc6', wheel / LOCK * MAXS, true);
+
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  if (flash > 0) { ctx.fillStyle = `rgba(229,73,62,${flash * .35})`; ctx.fillRect(0, 0, W, H); }
+}
+function shade(hex) { const n = parseInt(hex.slice(1), 16); const f = v => Math.max(0, Math.round(v * .72)); return `rgb(${f(n >> 16)},${f(n >> 8 & 255)},${f(n & 255)})`; }
+
+// ---------- HUD ----------
+function sensColor(d) { return d < .3 ? 'var(--stop)' : d < .8 ? '#f29a3d' : d < 1.5 ? 'var(--paint)' : 'var(--muted)'; }
+function updateHUD(dt) {
+  $('tTime').textContent = tElapsed.toFixed(1);
+  $('tHits').textContent = hits; $('hitWrap').classList.toggle('bad', hits > 0);
+  $('tSpd').textContent = (Math.abs(car.v) * 3.6).toFixed(0);
+  $('tWheel').textContent = '軚 ' + (wheel > 0 ? '+' : '') + Math.round(wheel) + '°';
+  $('wheel').style.transform = `rotate(${wheel}deg)`;
+  const f = sensor(true), r = sensor(false);
+  $('dF').textContent = f < 1.5 ? f.toFixed(2) + 'm' : '--'; $('sF').style.background = sensColor(f);
+  $('dR').textContent = r < 1.5 ? r.toFixed(2) + 'm' : '--'; $('sR').style.background = sensColor(r);
+  $('gas').classList.toggle('on', !!(gas || keys.ArrowUp || keys.KeyW));
+  $('brake').classList.toggle('on', !!(brake || keys.ArrowDown || keys.KeyS || keys.Space));
+  // parking radar beep
+  const dist = gear === 'R' ? r : gear === 'D' ? f : 9;
+  beepT -= dt;
+  if (dist < 1.5 && beepT <= 0) { beep(dist < .3 ? 1250 : 980, dist < .3 ? .12 : .06); beepT = dist < .3 ? .1 : .08 + (dist - .3) * .45; }
+  const st = inTarget(), h = $('hint');
+  if (st === 'in') { h.hidden = false; h.textContent = Math.abs(car.v) < .05 ? '已入位，停定…' : '已入位，煞停佢'; }
+  else if (st === 'dir') { h.hidden = false; h.textContent = '入咗位，但車頭要向外'; }
+  else if (!started) { h.hidden = false; h.textContent = '掛 D 或 R 波開始'; }
+  else h.hidden = true;
+}
+
+// ---------- end states ----------
+const stars = n => '★'.repeat(n) + '<s>' + '★'.repeat(3 - n) + '</s>';
+function endWin() {
+  mode = 'clear'; beep(880, .12, .08); setTimeout(() => beep(1320, .2, .08), 130);
+  const n = hits === 0 && tElapsed <= L.par ? 3 : hits <= 1 ? 2 : 1;
+  progress[L.code] = Math.max(progress[L.code] || 0, n); saveProgress();
+  const next = lvIdx + 1 < LEVELS.length;
+  showOverlay(`<div class="card result">
+    <h2>泊好！</h2><div class="big">${stars(n)}</div>
+    <dl><dt>樓層</dt><dd>${L.code} ${L.name}</dd><dt>時間</dt><dd>${tElapsed.toFixed(1)} s（標準 ${L.par} s）</dd><dt>花痕</dt><dd>${hits}</dd></dl>
+    <p class="help" style="margin:0">三星：零花痕兼喺標準時間內。兩星：最多一下花。</p>
+    <div class="btns">${next ? '<button class="btn" data-act="next">落一層</button>' : ''}<button class="btn ${next ? 'ghost' : ''}" data-act="retry">再泊一次</button><button class="btn ghost" data-act="menu">選關</button></div>
+  </div>`);
+}
+function endFail() {
+  mode = 'fail';
+  showOverlay(`<div class="card result">
+    <h2>車身花晒</h2>
+    <p class="tipline">撞咗 ${MAX_HITS} 下。試下開近鏡、慢慢搓，靠車頭車尾雷達同倒車輔助線。</p>
+    <div class="btns"><button class="btn" data-act="retry">再試</button><button class="btn ghost" data-act="menu">選關</button></div>
+  </div>`);
+}
+function showMenu() {
+  mode = 'menu';
+  const cards = LEVELS.map((f, i) => {
+    const lv = f(), best = progress[lv.code] || 0, open = i === 0 || progress[LEVELS[i-1]().code];
+    return `<button class="lv" data-lv="${i}" ${open ? '' : 'disabled'}><span class="code">${lv.code}</span><span class="nm">${lv.name}</span><span class="st">${open ? stars(best) : '未解鎖'}</span></button>`;
+  }).join('');
+  showOverlay(`<div class="card">
+    <div class="brand"><div class="stripe"></div><h1>窄位泊車王</h1><p>香港式地庫窄位，右軚車，自動波。由 B1 一路落到 B6 地獄格，車身要全部入晒白線先算泊好。</p></div>
+    <div class="levels">${cards}</div>
+    <div class="help">手機：左下軚盤用手指轉（左右各一圈半），右下揀 P R N D 波、踩煞車同油。放開煞車車會慢慢蠕動，好似真自動波。<br>
+    <a href="../" style="color:var(--paint);font-weight:700;text-decoration:none">← 返主頁揀香港／台灣</a><br>鍵盤：<kbd>←</kbd><kbd>→</kbd> 扭軚、<kbd>C</kbd> 回正、<kbd>↑</kbd> 油、<kbd>↓</kbd>/<kbd>空格</kbd> 煞車、<kbd>Q</kbd> 換 R、<kbd>E</kbd> 換 D、<kbd>P</kbd> 泊 P、<kbd>V</kbd> 換鏡頭。</div>
+  </div>`);
+}
+function showIntro() {
+  showOverlay(`<div class="card result">
+    <div class="brand"><div class="stripe"></div></div>
+    <h2>${L.code} ${L.name}</h2>
+    <p class="tipline">${L.tip}</p>
+    <div class="btns"><button class="btn" data-act="go">開車</button><button class="btn ghost" data-act="menu">選關</button></div>
+  </div>`);
+  mode = 'intro';
+}
+function showOverlay(html) { const o = $('ov'); o.innerHTML = html; o.hidden = false; }
+$('ov').addEventListener('click', e => {
+  audio();
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.lv != null) { loadLevel(+b.dataset.lv); showIntro(); return; }
+  const act = b.dataset.act;
+  if (act === 'go') { $('ov').hidden = true; mode = 'play'; }
+  if (act === 'retry') { loadLevel(lvIdx); }
+  if (act === 'next') { loadLevel(lvIdx + 1); showIntro(); }
+  if (act === 'menu') showMenu();
+});
+
+// ---------- input ----------
+function setWheel(v) { wheel = Math.max(-LOCK, Math.min(LOCK, v)); }
+function setGear(g) {
+  if (g === gear) return;
+  if (g !== 'N' && Math.abs(car.v) > .3) { beep(220, .15); return; }
+  gear = g; setGearUI(); beep(g === 'R' ? 660 : 520, .04, .04);
+}
+function setGearUI() { document.querySelectorAll('#gears button').forEach(b => b.classList.toggle('on', b.dataset.g === gear)); }
+document.querySelectorAll('#gears button').forEach(b => b.addEventListener('pointerdown', e => { e.preventDefault(); audio(); setGear(b.dataset.g); }));
+function pedal(el, set) {
+  const on = e => { e.preventDefault(); audio(); el.setPointerCapture?.(e.pointerId); set(true); };
+  const off = () => set(false);
+  el.addEventListener('pointerdown', on); el.addEventListener('pointerup', off); el.addEventListener('pointercancel', off); el.addEventListener('lostpointercapture', off);
+}
+pedal($('gas'), v => gas = v); pedal($('brake'), v => brake = v);
+{ // steering wheel drag
+  const el = $('wheel'); let last = null, pid = null;
+  const ang = e => { const r = el.getBoundingClientRect(); return Math.atan2(e.clientY - (r.top + r.height/2), e.clientX - (r.left + r.width/2)) * 180 / PI; };
+  el.addEventListener('pointerdown', e => { e.preventDefault(); audio(); pid = e.pointerId; el.setPointerCapture(pid); last = ang(e); });
+  el.addEventListener('pointermove', e => { if (e.pointerId !== pid || last == null) return; const a = ang(e); let d = a - last; if (d > 180) d -= 360; if (d < -180) d += 360; setWheel(wheel + d); last = a; });
+  const end = () => { last = null; pid = null; };
+  el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+}
+$('bCenter').addEventListener('click', () => setWheel(0));
+$('bCam').addEventListener('click', () => toggleCam());
+function toggleCam() { camMode = camMode === 'fit' ? 'follow' : 'fit'; $('bCam').textContent = camMode === 'fit' ? '近鏡' : '全景'; if (car) { camX = car.x; camY = car.y; } }
+$('bSnd').addEventListener('click', () => { soundOn = !soundOn; $('bSnd').textContent = soundOn ? '聲 開' : '聲 關'; });
+$('bRetry').addEventListener('click', () => { if (L) loadLevel(lvIdx); });
+$('bMenu').addEventListener('click', showMenu);
+window.addEventListener('keydown', e => {
+  audio();
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault();
+  keys[e.code] = true;
+  if (mode !== 'play') return;
+  if (e.code === 'KeyQ') setGear('R'); if (e.code === 'KeyE') setGear('D'); if (e.code === 'KeyP') setGear('P'); if (e.code === 'KeyN') setGear('N');
+  if (e.code === 'KeyC') setWheel(0); if (e.code === 'KeyV') toggleCam(); if (e.code === 'KeyR') loadLevel(lvIdx);
+});
+window.addEventListener('keyup', e => { keys[e.code] = false; });
+window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; gas = brake = false; });
+window.addEventListener('resize', layout);
+
+// ---------- loop ----------
+let lastT = performance.now();
+function frame(now) {
+  const dt = Math.min(.05, (now - lastT) / 1000); lastT = now;
+  if (L && mode === 'play') {
+    const n = 4; for (let i = 0; i < n && mode === 'play'; i++) step(dt / n);
+    if (started) tElapsed += dt;
+    if (mode === 'play') {
+      updateHUD(dt);
+      if (inTarget() === 'in' && Math.abs(car.v) < .05) { holdT += dt; if (holdT > 1) endWin(); } else holdT = 0;
+    }
+  }
+  shake = Math.max(0, shake - dt); flash = Math.max(0, flash - dt * 1.6);
+  render(now);
+  requestAnimationFrame(frame);
+}
+
+loadLevel(0); showMenu(); layout();
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

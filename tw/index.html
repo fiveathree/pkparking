@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <title>機車格地獄</title>
-<meta name="description" content="3D 台灣騎樓機車格泊車遊戲：機車冇倒後，要落車手推、拉車尾擺正人哋架車，唔好推冧。">
+<meta name="description" content="3D 台灣騎樓機車格泊車遊戲：用腳踩倒後、落車手推、拉車尾擺正人哋架車，唔好推冧。">
 <meta name="theme-color" content="#0b0d14">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta property="og:type" content="website">
 <meta property="og:title" content="機車格地獄">
-<meta property="og:description" content="台灣騎樓機車格，一架貼一架。機車冇倒後，要落車手推，仲要幫人擺正，唔好推冧！">
+<meta property="og:description" content="台灣騎樓機車格，一架貼一架。用腳踩倒後、落車手推，仲要幫人擺正，唔好推冧！">
 <meta property="og:url" content="https://fiveathree.github.io/pkparking/tw/">
 <meta property="og:image" content="https://fiveathree.github.io/pkparking/tw/og-image.png">
 <meta property="og:image:width" content="1200">
@@ -154,7 +154,7 @@ const LEVELS = [
   { name:'騎樓入門', n:12, target:6, empty:[2], need:null, start:{x:1.2,z:4,a:0}, par:45,
     tip:'騎到亮咗嘅格，車頭直入都得。停好之後撳「落車」，就算泊好。' },
   { name:'車頭向外', n:12, target:5, empty:[], need:PI/2, start:{x:10.5,z:4,a:PI}, par:70,
-    tip:'台灣機車多數車頭向外泊。機車冇倒後波，要落車，撳「推車」捉住車頭，用手拉入格。' },
+    tip:'台灣機車多數車頭向外泊。可以停定後向後拉搖桿，坐喺車上用腳踩倒後入格；或者落車用手推。' },
   { name:'借位擺正', n:12, target:7, empty:[], need:PI/2, start:{x:2,z:4,a:0}, par:110,
     adj:{6:{dx:.27,da:.24},8:{dx:-.26,da:-.22}},
     tip:'隔籬兩架泊到斜晒，食咗你個格。行入騎樓，喺車尾撳「拉車尾」，左右擺正佢哋。唔好推冧！' },
@@ -479,15 +479,18 @@ function step(dt) {
   const dx = m > .15 ? ix / Math.hypot(ix, iy) : 0, dz = m > .15 ? -iy / Math.hypot(ix, iy) : 0;
 
   if (mode === 'ride') {
-    const s = own; let thr = 0, brk = false, steerT = 0;
+    const s = own; let thr = 0, brk = false, steerT = 0, rev = 0;
     if (m > .15) {
       const diff = wrap(Math.atan2(dz, dx) - s.a);
       if (Math.abs(diff) < 1.9) { steerT = Math.max(-.6, Math.min(.6, diff * 1.3)); thr = m; }
-      else { steerT = Math.sign(diff) * .6; thr = m * .45; }
+      else if (s.v > .25) { brk = true; }
+      else { rev = m; steerT = Math.max(-.6, Math.min(.6, (Math.cos(s.a) * dz - Math.sin(s.a) * dx) * 1.4)); }
       started = true;
     } else brk = true;
     s.steer += Math.max(-2.5 * dt, Math.min(2.5 * dt, steerT - s.steer));
-    s.v += thr * 3 * dt - (brk ? 5 : .6) * dt; s.v = Math.max(0, Math.min(4.5, s.v));
+    if (rev) s.v = Math.max(-.75 * rev, s.v - 1.4 * dt);
+    else if (s.v < 0) s.v = Math.min(0, s.v + 3 * dt);
+    else { s.v += thr * 3 * dt - (brk ? 5 : .6) * dt; s.v = Math.max(0, Math.min(4.5, s.v)); }
     const c = Math.cos(s.a), sn = Math.sin(s.a);
     const rx = s.x - c*AXO + c*s.v*dt, rz = s.z - sn*AXO + sn*s.v*dt;
     const na = s.a + s.v / WB * Math.tan(s.steer) * dt;
@@ -552,7 +555,9 @@ function syncMeshes(dt, now) {
   pr.position.set(p.x, 0, p.z); pr.rotation.y = -p.face;
   if (mode === 'ride') {
     const l = lat(own); pr.position.set(own.x - Math.cos(own.a) * .32, .12, own.z - Math.sin(own.a) * .32);
-    p.legs.forEach(g => g.rotation.z = 1.25); p.arms.forEach(g => g.rotation.z = 1.05);
+    if (own.v < -.05) { walkPh += dt * 7; p.legs[0].rotation.z = .25 + Math.sin(walkPh) * .45; p.legs[1].rotation.z = .25 - Math.sin(walkPh) * .45; }
+    else p.legs.forEach(g => g.rotation.z = 1.25);
+    p.arms.forEach(g => g.rotation.z = 1.05);
   } else {
     const moving = Math.hypot(input.x, input.y) > .15, sw = moving ? Math.sin(walkPh) * .55 : 0;
     p.legs[0].rotation.z = sw; p.legs[1].rotation.z = -sw;
@@ -607,7 +612,7 @@ function hintText(st) {
   if (st === 'in' && grab) return ['入咗格，撳「放手」', true];
   if (st === 'dir') return ['入咗格，但車頭要向外（向住馬路）', false];
   if (mode === 'push') return [grab.kind === 'rear' ? '搖桿推去邊，車尾就擺去邊；前後推就前後移' : '搖桿推去邊，車就向嗰邊推，可以轉車頭', false];
-  if (mode === 'ride' && !started) return ['用搖桿揸車，推去邊就去邊。機車冇倒後', false];
+  if (mode === 'ride' && !started) return ['用搖桿揸車，推去邊就去邊。停定再向後拉，就用腳踩倒後', false];
   return null;
 }
 function updateHUD(dt) {
@@ -645,10 +650,10 @@ function showMenu() {
   phase = 'menu';
   const cards = LEVELS.map((lv, i) => { const open = i === 0 || progress['L' + (i - 1)]; return `<button class="lv" data-lv="${i}" ${open ? '' : 'disabled'}><span class="no">No.${i + 1}</span><span class="nm">${lv.name}</span><span class="st">${open ? starStr(progress['L' + i] || 0) : '未解鎖'}</span></button>`; }).join('');
   showOverlay(`<div class="card"><div class="brand"><div class="slots"></div><h1>機車格<i>地獄</i></h1>
-    <p>台灣街頭騎樓前嘅機車格，一架貼一架。機車冇倒後，要落車用手推；隔籬泊斜咗，就要幫人擺正。推冧人哋架車會扣分。</p></div>
+    <p>台灣街頭騎樓前嘅機車格，一架貼一架。機車可以用腳踩慢慢倒後，窄到唔得就要落車用手推；隔籬泊斜咗，就要幫人擺正。推冧人哋架車會扣分。</p></div>
     <div class="levels">${cards}</div>
     <div class="help">手機：左下搖桿推去邊就去邊。右下「落車／上車」同「推車」。行到車頭旁邊撳就推車頭，行到車尾後面撳就拉車尾。<br>
-    <a class="xlink" href="../">→ 玩香港汽車版「窄位泊車王」</a><br>鍵盤：<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 或方向鍵移動、<kbd>F</kbd> 上落車、<kbd>E</kbd> 推車／放手、<kbd>V</kbd> 換鏡頭、<kbd>R</kbd> 重來。</div></div>`);
+    <a class="xlink" href="../">← 返主頁揀香港／台灣</a><br>鍵盤：<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 或方向鍵移動、<kbd>F</kbd> 上落車、<kbd>E</kbd> 推車／放手、<kbd>V</kbd> 換鏡頭、<kbd>R</kbd> 重來。</div></div>`);
 }
 function showIntro() {
   phase = 'intro';
