@@ -119,7 +119,7 @@ dt{color:var(--muted)} dd{margin:0;font-family:var(--f-mono);font-variant-numeri
       <span id="sTipW">推冧 <em id="sTip">0</em></span>
     </div>
     <div class="tools">
-      <button id="bCam">俯視</button>
+      <button id="bCam">鏡頭：街景</button>
       <button id="bRetry">重來</button>
       <button id="bMenu">選關</button>
     </div>
@@ -271,7 +271,7 @@ const lat = s => [-Math.sin(s.a), Math.cos(s.a)];
 let lvIdx = 0, L = null, world = null, scooters = [], walls = [], own = null, player = null;
 let mode = 'ride', phase = 'menu', grab = null, camMode = 'street';
 let tElapsed = 0, started = false, tipped = 0, holdT = 0, blockT = 0, pending = [], toastT = 0;
-let walkPh = 0, input = { x: 0, y: 0 };
+let walkPh = 0, input = { x: 0, y: 0 }, lookYaw = 0, lookDrag = false, camYawS = 0, povBack = false;
 const camPos = new T.Vector3(0, 8, 12), camLook = new T.Vector3();
 let progress = {};
 try { progress = JSON.parse(localStorage.getItem('jcg-progress') || '{}') || {}; } catch (e) {}
@@ -476,7 +476,12 @@ function release() { grab = null; mode = 'walk'; syncUI(); }
 // ---------- update ----------
 function step(dt) {
   const ix = input.x, iy = input.y, m = Math.min(1, Math.hypot(ix, iy));
-  const dx = m > .15 ? ix / Math.hypot(ix, iy) : 0, dz = m > .15 ? -iy / Math.hypot(ix, iy) : 0;
+  let dx = m > .15 ? ix / Math.hypot(ix, iy) : 0, dz = m > .15 ? -iy / Math.hypot(ix, iy) : 0;
+  if (camMode === 'pov' && m > .15) {
+    const ya = mode === 'ride' ? own.a : mode === 'push' ? grab.s.a : player.face, fx = Math.cos(ya), fz = Math.sin(ya);
+    const ux = ix / Math.hypot(ix, iy), uy = iy / Math.hypot(ix, iy);
+    dx = fx * uy - fz * ux; dz = fz * uy + fx * ux;
+  }
 
   if (mode === 'ride') {
     const s = own; let thr = 0, brk = false, steerT = 0, rev = 0;
@@ -499,6 +504,15 @@ function step(dt) {
     if (b) { if (b !== 'wall' && s.v > 1.6) tip(b, c, sn); s.v = 0; }
     else { s.x = nx; s.z = nz; s.a = na; }
     player.x = s.x - Math.cos(s.a) * .3; player.z = s.z - Math.sin(s.a) * .3; player.face = s.a;
+  } else if (mode === 'walk' && camMode === 'pov') {
+    if (m > .15) {
+      player.face += ix * 2.4 * dt;
+      const sp = 1.9 * iy * dt, nx = player.x + Math.cos(player.face) * sp, nz = player.z + Math.sin(player.face) * sp;
+      if (!playerBlocked(nx, nz)) { player.x = nx; player.z = nz; }
+      else if (!playerBlocked(nx, player.z)) player.x = nx;
+      else if (!playerBlocked(player.x, nz)) player.z = nz;
+      walkPh += dt * 9 * Math.abs(iy); started = true;
+    }
   } else if (mode === 'walk') {
     if (m > .15) {
       const sp = 1.9 * m * dt, nx = player.x + dx * sp, nz = player.z + dz * sp;
@@ -510,6 +524,7 @@ function step(dt) {
   } else if (mode === 'push') {
     const s = grab.s, c = Math.cos(s.a), sn = Math.sin(s.a);
     const along = m > .15 ? (dx * c + dz * sn) * m : 0, side = m > .15 ? (c * dz - sn * dx) * m : 0;
+    povBack = along < -.3;
     let nx = s.x, nz = s.z, na = s.a;
     if (grab.kind === 'front') {
       s.steer += Math.max(-2 * dt, Math.min(2 * dt, Math.max(-.6, Math.min(.6, side * 1.4)) - s.steer));
@@ -571,13 +586,32 @@ function syncMeshes(dt, now) {
   const f = mode === 'ride' ? own : mode === 'push' ? grab.s : p;
   const asp = camera.aspect, k = Math.max(1, Math.min(2.1, 1.05 / asp));
   let want, look;
+  player.root.visible = camMode !== 'pov';
+  if (camMode === 'pov') {
+    let ya, ex, ez, ey = 1.56;
+    if (mode === 'ride') { ya = own.a; ex = own.x - Math.cos(ya) * .45; ez = own.z - Math.sin(ya) * .45; ey = 1.66; }
+    else { ya = mode === 'push' ? grab.s.a : p.face; ex = p.x; ez = p.z; }
+    const back = (mode === 'ride' && own.v < -.05) || (mode === 'push' && povBack);
+    const yaw = ya + lookYaw + (back ? PI : 0);
+    camYawS += wrap(yaw - camYawS) * Math.min(1, dt * (back ? 4 : 10));
+    camPos.set(ex, ey, ez); camLook.set(ex + Math.cos(camYawS) * 6, ey - (mode === 'ride' ? .75 : .9), ez + Math.sin(camYawS) * 6);
+    camera.position.copy(camPos); camera.lookAt(camLook);
+    if (!lookDrag) lookYaw *= Math.max(0, 1 - dt * 3);
+    sun.position.set(ex - 6, 14, ez + 8); sun.target.position.set(ex, 0, ez);
+    return;
+  }
   if (camMode === 'street') { const fz = Math.max(-2, Math.min(4, f.z)) * .7; want = new T.Vector3(f.x, 6.4 * k, fz + 7.6 * k); look = new T.Vector3(f.x, .2, fz - .8); }
   else { const k2 = Math.max(1, Math.min(1.9, .95 / asp)); want = new T.Vector3(f.x, 10.5 * k2, f.z + 1.4); look = new T.Vector3(f.x, 0, f.z); }
   const a = 1 - Math.exp(-dt * 5); camPos.lerp(want, a); camLook.lerp(look, a);
   camera.position.copy(camPos); camera.lookAt(camLook);
   sun.position.set(camLook.x - 6, 14, camLook.z + 8); sun.target.position.copy(camLook);
 }
-function applyCamVis() { if (world) world.userData.upper.forEach(o => o.visible = camMode === 'street'); $('bCam').textContent = camMode === 'street' ? '俯視' : '街景'; }
+function applyCamVis() {
+  if (world) world.userData.upper.forEach(o => o.visible = camMode !== 'top');
+  $('bCam').textContent = '鏡頭：' + { street: '街景', top: '俯視', pov: '主視角' }[camMode];
+  camera.fov = camMode === 'pov' ? Math.min(92, Math.max(62, 2 * Math.atan(Math.tan(41 * PI / 180) / (camera.aspect || 1)) * 180 / PI)) : 48; camera.near = camMode === 'pov' ? .05 : .1; camera.updateProjectionMatrix();
+  if (camMode === 'pov' && player) camYawS = mode === 'ride' ? own.a : mode === 'push' ? grab.s.a : player.face;
+}
 
 // ---------- rules ----------
 function inSlotIdx(s, tol = .08) {
@@ -625,7 +659,7 @@ function updateHUD(dt) {
 }
 function layout() {
   const w = canvas.clientWidth, h = canvas.clientHeight;
-  renderer.setSize(w, h, false); camera.aspect = w / Math.max(1, h); camera.updateProjectionMatrix();
+  renderer.setSize(w, h, false); camera.aspect = w / Math.max(1, h); camera.updateProjectionMatrix(); if (world) applyCamVis();
   const hb = $('hud').getBoundingClientRect().bottom - $('app').getBoundingClientRect().top;
   const ct = $('controls').getBoundingClientRect().top - $('app').getBoundingClientRect().top;
   $('chip').style.top = (hb - 8) + 'px';
@@ -653,7 +687,7 @@ function showMenu() {
     <p>台灣街頭騎樓前嘅機車格，一架貼一架。機車可以用腳踩慢慢倒後，窄到唔得就要落車用手推；隔籬泊斜咗，就要幫人擺正。推冧人哋架車會扣分。</p></div>
     <div class="levels">${cards}</div>
     <div class="help">手機：左下搖桿推去邊就去邊。右下「落車／上車」同「推車」。行到車頭旁邊撳就推車頭，行到車尾後面撳就拉車尾。<br>
-    <a class="xlink" href="../">← 返主頁揀香港／台灣</a><br>鍵盤：<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 或方向鍵移動、<kbd>F</kbd> 上落車、<kbd>E</kbd> 推車／放手、<kbd>V</kbd> 換鏡頭、<kbd>R</kbd> 重來。</div></div>`);
+    <a class="xlink" href="../">← 返主頁揀香港／台灣</a><br>鍵盤：<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 或方向鍵移動、<kbd>F</kbd> 上落車、<kbd>E</kbd> 推車／放手、<kbd>V</kbd> 換鏡頭（街景／俯視／主視角，主視角可以拖畫面四圍望）、<kbd>R</kbd> 重來。</div></div>`);
 }
 function showIntro() {
   phase = 'intro';
@@ -700,7 +734,14 @@ const keys = {};
 }
 $('bRide').addEventListener('click', toggleRide);
 $('bGrab').addEventListener('click', toggleGrab);
-$('bCam').addEventListener('click', () => { camMode = camMode === 'street' ? 'top' : 'street'; applyCamVis(); });
+$('bCam').addEventListener('click', () => { camMode = { street: 'top', top: 'pov', pov: 'street' }[camMode]; applyCamVis(); });
+{ // drag on the 3D view to look around in first-person
+  let pid = null, lx = 0;
+  canvas.addEventListener('pointerdown', e => { if (camMode !== 'pov') return; pid = e.pointerId; lx = e.clientX; lookDrag = true; canvas.setPointerCapture(pid); });
+  canvas.addEventListener('pointermove', e => { if (e.pointerId !== pid) return; lookYaw = Math.max(-2.4, Math.min(2.4, lookYaw + (e.clientX - lx) * .008)); lx = e.clientX; });
+  const end = () => { pid = null; lookDrag = false; };
+  canvas.addEventListener('pointerup', end); canvas.addEventListener('pointercancel', end);
+}
 $('bRetry').addEventListener('click', () => { if (!L) return; buildLevel(lvIdx); $('ov').hidden = true; phase = 'play'; });
 $('bMenu').addEventListener('click', showMenu);
 function keyInput() {
