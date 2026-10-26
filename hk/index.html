@@ -401,7 +401,9 @@ function buildWorld() {
   for (const r of L.obs) if (r.t === 'car') {
     const rr = rng(r.seed * 31 + 7), col = CAR_COLORS[Math.floor(rr() * CAR_COLORS.length)], flip = rr() < .5;
     const vert = r.h > r.w, a = vert ? (flip ? -PI / 2 : PI / 2) : (flip ? 0 : PI);
-    const c = makeCar(col, false); c.root.position.set(r.x + r.w / 2, 0, r.y + r.h / 2); c.root.rotation.y = -a; world.add(c.root);
+    const c = makeCar(col, false); c.root.position.set(r.x + r.w / 2, 0, r.y + r.h / 2); c.root.rotation.y = -a;
+    c.root.scale.set((vert ? r.h : r.w) / CAR_L, 1, (vert ? r.w : r.h) / CAR_W);   // body matches the hit box exactly
+    world.add(c.root);
   }
   // convex mirror at the blind corner
   if (L.mirror) { const [mx, my] = L.mirror; bx(.06, 2.2, .06, Mt(0x999999, .4, .5), mx, 1.1, my, world);
@@ -465,7 +467,7 @@ const collides = (x, y, a) => { const P = corners(x, y, a); return L.obs.some(r 
 const ptDist = (px, py, r) => Math.hypot(Math.max(r.x - px, 0, px - r.x - r.w), Math.max(r.y - py, 0, py - r.y - r.h));
 function sensor(front) {
   const c = Math.cos(car.a), s = Math.sin(car.a), lx = front ? CAR_L/2 : -CAR_L/2; let best = 9;
-  for (const ly of [-.8, 0, .8]) { const px = car.x + c*lx - s*ly, py = car.y + s*lx + c*ly; for (const r of L.obs) best = Math.min(best, ptDist(px, py, r)); }
+  for (const ly of [-CAR_W/2, 0, CAR_W/2]) { const px = car.x + c*lx - s*ly, py = car.y + s*lx + c*ly; for (const r of L.obs) best = Math.min(best, ptDist(px, py, r)); }
   return best;
 }
 const wrap = a => { while (a > PI) a -= 2*PI; while (a < -PI) a += 2*PI; return a; };
@@ -667,7 +669,7 @@ function updateHUD(dt) {
   $('gas').classList.toggle('on', !!(gas || keys.ArrowUp || keys.KeyW));
   $('brake').classList.toggle('on', !!(brake || keys.ArrowDown || keys.KeyS || keys.Space));
   // parking radar beep
-  const dist = gear === 'R' ? r : gear === 'D' ? f : 9;
+  const dist = gear === 'R' || gear === 'D' ? Math.min(f, r) : 9;   // front and rear radar both work in either gear: the nose swings out when reversing on lock
   beepT -= dt;
   if (dist < 1.5 && beepT <= 0) { beep(dist < .3 ? 1250 : 980, dist < .3 ? .12 : .06); beepT = dist < .3 ? .1 : .08 + (dist - .3) * .45; }
   const st = inTarget(), h = $('hint');
