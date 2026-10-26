@@ -316,7 +316,7 @@ function makeCar(color, player) {
     bx(.32, .16, .6, Mt(0xf7efd6, .4, 0, 0x5a5440), -.3, 1.53, 0, root);
     // interior (seen from the driver's seat)
     bx(2.2, .02, 1.55, darkM, -.25, .86, 0, root);
-    bx(.38, .22, 1.58, darkM, .72, .97, 0, root);
+    bx(.38, .14, 1.58, darkM, .72, .93, 0, root);   // dash top at 1.0 so the whole bonnet shows from the 1.3 eye
     bx(.45, .35, .55, darkM, -.75, .95, .4, root); bx(.45, .35, .55, darkM, -.75, .95, -.4, root);
     for (const z of [-1, 1]) beam([.9, .86, .79 * z], [.32, 1.4, .74 * z], .07, trimM, root);
     beam([.9, .86, -.79], [.9, .86, .79], .05, trimM, root);
@@ -577,7 +577,7 @@ function layout() {
   rearRect = camMode === 'pov' ? { x: (w - iw) / 2, y: Math.max(hb + 120, availBot - ih - 70), w: iw, h: ih } : { x: w - iw - 16, y: hb + 34, w: iw, h: ih };
   { // driver's mirrors: rear-view at the top of the windshield (left of centre for right-hand drive), wing mirrors at both sides
     const cw = Math.min(300, w * .5), ch = cw * .3; placeMirror(mirC, w / 2 - cw / 2 - w * .06, hb + 32, cw, ch, 4);
-    const sw = Math.min(170, w * .3), sh = sw * .66, my = availTop + (availBot - availTop) * .42;
+    const sw = Math.min(170, w * .3), sh = sw * .66, my = availTop + (availBot - availTop) * .22;   // high enough to clear the bonnet corners
     placeMirror(mirL, 10, my, sw, sh, 4); placeMirror(mirR, w - sw * 1.1 - 10, my - sh * .05, sw * 1.1, sh * 1.1, 4);
   }
   const rc = $('rearcam'); Object.assign(rc.style, { left: rearRect.x + 'px', top: rearRect.y + 'px', width: iw + 'px', height: ih + 'px' });
@@ -590,7 +590,8 @@ function applyCamVis() {
   $('bCam').textContent = '鏡頭：' + { top: '俯視', chase: '追蹤', pov: '司機' }[camMode];
   snapCam = true;
 }
-function povFov() { const a = camera.aspect || 1; return Math.min(80, Math.max(62, 2 * Math.atan(Math.tan(41 * PI / 180) / a) * 180 / PI)); }
+// ~100° horizontal like sitting in the seat (both front corners in view), vertical capped so portrait phones do not fish-eye
+function povFov() { const a = camera.aspect || 1; return Math.min(100, Math.max(70, 2 * Math.atan(Math.tan(50 * PI / 180) / a) * 180 / PI)); }
 function toggleCam() { camMode = { top: 'chase', chase: 'pov', pov: 'top' }[camMode]; lookYaw = 0; applyCamVis(); layout(); }
 function updateCamera(dt) {
   const c = Math.cos(car.a), s = Math.sin(car.a);
@@ -607,7 +608,7 @@ function updateCamera(dt) {
     camera.up.set(0, 1, 0);
   } else {
     const ex = car.x - c * .15 - s * .38, ez = car.y - s * .15 + c * .38, yaw = car.a + lookYaw;
-    want = new T.Vector3(ex, 1.24, ez); look = new T.Vector3(ex + Math.cos(yaw) * 10, .55, ez + Math.sin(yaw) * 10);
+    want = new T.Vector3(ex, 1.3, ez); look = new T.Vector3(ex + Math.cos(yaw) * 10, .3, ez + Math.sin(yaw) * 10);
     camera.up.set(0, 1, 0); k = 1;
     if (!lookDrag) lookYaw *= Math.max(0, 1 - dt * 2.5);
   }
