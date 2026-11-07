@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>外送風雲</title>
+<meta name="description" content="外送平台調度遊戲：喺真實城市地圖上分派外送員，爆單就加錢、停單，或者親自落場送兼泊車。">
+<meta name="theme-color" content="#0d0f13">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta property="og:type" content="website">
+<meta property="og:title" content="外送風雲">
+<meta property="og:description" content="做外送平台嘅中央調度：真實地圖、分區派人、爆單加錢、親自落場送兼泊車。">
+<meta property="og:url" content="https://fiveathree.github.io/pkparking/delivery/">
+<meta property="og:image" content="https://fiveathree.github.io/pkparking/delivery/og-image.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://fiveathree.github.io/pkparking/delivery/og-image.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;700&family=Noto+Sans+TC:wght@400;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+:root{--bg:#0d0f13;--panel:#151820;--line:#262b36;--ink:#ece8df;--dim:#8a8f9c;--brand:#7c6cff;--brand2:#b6adff;--warn:#ff5d5d;--ok:#4fd1a5;--gold:#f2c53d;
+  --font:'Noto Sans TC',system-ui,sans-serif;--mono:'IBM Plex Mono',ui-monospace,monospace}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--ink);font-family:var(--font);overflow:hidden}
+#app{display:grid;grid-template-rows:auto 1fr auto;grid-template-columns:1fr 280px;height:100dvh}
+#top{grid-column:1/-1;display:flex;align-items:center;gap:14px;padding:8px 14px;background:var(--panel);border-bottom:1px solid var(--line);font-size:14px;white-space:nowrap;overflow:hidden}
+#top .logo{font-weight:900;font-size:17px;color:var(--brand2);text-decoration:none}
+#top .stat{font-family:var(--mono);display:flex;gap:5px;align-items:center}
+#top .stat b{font-weight:700}
+#top .sp{flex:1}
+#map{grid-column:1;background:#11141a}
+#side{grid-column:2;background:var(--panel);border-left:1px solid var(--line);overflow:auto;padding:12px;font-size:13px;display:flex;flex-direction:column;gap:12px}
+#side h3{font-size:12px;color:var(--dim);font-weight:700;letter-spacing:.06em;margin-bottom:6px}
+.kv{display:grid;grid-template-columns:1fr auto;gap:4px 10px;font-family:var(--mono)}
+.kv span:nth-child(odd){font-family:var(--font);color:var(--dim)}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle}
+#bottom{grid-column:1/-1;display:flex;gap:8px;padding:8px 12px;background:var(--panel);border-top:1px solid var(--line);overflow-x:auto}
+button{font:inherit;font-size:13px;font-weight:700;color:var(--ink);background:#1f2430;border:1px solid var(--line);border-radius:8px;padding:8px 12px;cursor:pointer;white-space:nowrap}
+button:hover:not(:disabled){border-color:var(--brand)}
+button:disabled{opacity:.4;cursor:default}
+button.pri{background:var(--brand);border-color:var(--brand);color:#fff}
+/* dark map without another tile source: dim + invert the standard OSM tiles */
+.leaflet-tile-pane{filter:invert(1) hue-rotate(200deg) brightness(.85) contrast(.9) saturate(.6)}
+.leaflet-container{font-family:var(--font);background:#11141a}
+.leaflet-control-attribution{background:rgba(13,15,19,.75)!important;color:var(--dim)!important}
+.leaflet-control-attribution a{color:var(--brand2)!important}
+#overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(13,15,19,.86);z-index:1000;padding:16px}
+#overlay[hidden]{display:none}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px;width:min(380px,100%);text-align:center}
+.card h2{font-size:20px;margin-bottom:8px}
+.card p{color:var(--dim);font-size:14px;margin-bottom:14px;line-height:1.6}
+.spin{width:30px;height:30px;border:3px solid var(--line);border-top-color:var(--brand);border-radius:50%;margin:0 auto 12px;animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (max-width:760px){
+  #app{grid-template-columns:1fr;grid-template-rows:auto 1fr auto}
+  #side{position:fixed;left:0;right:0;bottom:52px;max-height:46dvh;border-left:0;border-top:1px solid var(--line);border-radius:14px 14px 0 0;z-index:500;transform:translateY(calc(100% - 34px));transition:transform .25s}
+  #side.open{transform:none}
+  #side .grip{display:block}
+  #top{gap:10px;font-size:13px}
+}
+#side .grip{display:none;width:100%;text-align:center;color:var(--dim);font-size:12px;cursor:pointer;padding-bottom:4px}
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="top">
+    <a class="logo" href="../">外送風雲</a>
+    <span class="stat">📍<b id="tCity">高雄</b></span>
+    <span class="sp"></span>
+  </header>
+  <div id="map"></div>
+  <aside id="side">
+    <div class="grip" id="grip">▲ 資料</div>
+    <section>
+      <h3>地圖資料</h3>
+      <div class="kv">
+        <span><i class="dot" style="background:#ff9f43"></i>餐廳</span><b id="cRest">–</b>
+        <span><i class="dot" style="background:#ffd166"></i>快餐</span><b id="cFast">–</b>
+        <span><i class="dot" style="background:#c08bff"></i>咖啡店</span><b id="cCafe">–</b>
+        <span><i class="dot" style="background:#4fd1a5"></i>超市／便利店</span><b id="cShop">–</b>
+        <span>住宅（送餐目的地）</span><b id="cHome">–</b>
+        <span>道路路口</span><b id="cNode">–</b>
+      </div>
+    </section>
+    <section>
+      <h3>資料來源</h3>
+      <div class="kv"><span>更新於</span><b id="cWhen">–</b></div>
+    </section>
+  </aside>
+  <nav id="bottom">
+    <button id="bReload" title="重新由 OpenStreetMap 抓地圖資料">重新抓地圖</button>
+  </nav>
+</div>
+<div id="overlay"><div class="card" id="ovCard"><div class="spin"></div><h2>載入地圖中</h2><p>第一次開要由 OpenStreetMap 抓資料，大約十幾秒。</p></div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+
+// ---------- cities ----------
+// bbox about 2 km x 2 km round the centre
+const CITIES = {
+  khh: { name: '高雄', center: [22.6245, 120.3010], half: [0.009, 0.00975] },
+};
+let cityId = 'khh';
+
+// ---------- map data: Overpass, cached 7 days ----------
+const CACHE_DAYS = 7, MAP_VER = 1;
+const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
+const ROADS = 'trunk|primary|secondary|tertiary|unclassified|residential|living_street|service|trunk_link|primary_link|secondary_link|tertiary_link';
+
+function bboxOf(c) { const [la, lo] = c.center, [dla, dlo] = c.half; return [la - dla, lo - dlo, la + dla, lo + dlo]; }
+function query(c) {
+  const b = bboxOf(c).join(',');
+  return `[out:json][timeout:90];way["highway"~"^(${ROADS})$"](${b});out geom qt;` +
+    `(nwr["amenity"~"^(restaurant|fast_food|cafe)$"](${b});nwr["shop"~"^(supermarket|convenience)$"](${b});way["building"~"^(residential|apartments)$"](${b}););out center qt;`;
+}
+// compact form: N = flat [lat,lon,...] road nodes, W = road ways as node-index lists, P = places [lat,lon,kind,name], H = homes [lat,lon]
+function compact(json) {
+  const idx = new Map(), N = [], W = [], P = [], H = [];
+  const r5 = v => Math.round(v * 1e5) / 1e5;
+  for (const e of json.elements) {
+    const t = e.tags || {};
+    if (e.type === 'way' && t.highway && e.geometry) {
+      const w = [];
+      e.nodes.forEach((id, i) => {
+        if (!idx.has(id)) { idx.set(id, N.length / 2); N.push(r5(e.geometry[i].lat), r5(e.geometry[i].lon)); }
+        w.push(idx.get(id));
+      });
+      if (w.length > 1) W.push(w);
+      continue;
+    }
+    const p = e.type === 'node' ? e : e.center; if (!p) continue;
+    const kind = t.amenity || (t.shop ? 'shop' : null);
+    if (kind) P.push([r5(p.lat), r5(p.lon), kind, t['name:zh'] || t.name || '']);
+    else if (t.building) H.push([r5(p.lat), r5(p.lon)]);
+  }
+  return { v: MAP_VER, t: Date.now(), N, W, P, H };
+}
+async function fetchOverpass(c) {
+  let err;
+  for (const url of OVERPASS) {
+    try {
+      const r = await fetch(url, { method: 'POST', body: new URLSearchParams({ data: query(c) }) });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return compact(await r.json());
+    } catch (e) { err = e; }
+  }
+  throw err;
+}
+const cacheKey = id => 'wsfy-map-' + id;
+function readCache(id) { try { const d = JSON.parse(localStorage.getItem(cacheKey(id))); return d && d.v === MAP_VER ? d : null; } catch { return null; } }
+function writeCache(id, d) { try { localStorage.setItem(cacheKey(id), JSON.stringify(d)); } catch {} }
+async function loadCity(id, force) {
+  const cached = readCache(id);
+  if (cached && !force && Date.now() - cached.t < CACHE_DAYS * 864e5) return cached;
+  try { const d = await fetchOverpass(CITIES[id]); writeCache(id, d); return d; }
+  catch (e) { if (cached) return cached; throw e; }   // stale cache beats a blank screen
+}
+
+// ---------- map ----------
+const map = L.map('map', { zoomControl: false, preferCanvas: true, attributionControl: true });
+L.control.zoom({ position: 'topleft' }).addTo(map);
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, minZoom: 13,
+  attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors' }).addTo(map);
+let layer = L.layerGroup().addTo(map);
+const KIND = { restaurant: ['#ff9f43', '餐廳'], fast_food: ['#ffd166', '快餐'], cafe: ['#c08bff', '咖啡店'], shop: ['#4fd1a5', '超市／便利店'] };
+
+function draw(d) {
+  layer.clearLayers();
+  const c = CITIES[cityId], b = bboxOf(c);
+  map.setMaxBounds(L.latLngBounds([b[0] - .01, b[1] - .01], [b[2] + .01, b[3] + .01]));
+  map.fitBounds([[b[0], b[1]], [b[2], b[3]]]);
+  for (const w of d.W) layer.addLayer(L.polyline(w.map(i => [d.N[2 * i], d.N[2 * i + 1]]), { color: '#3b4252', weight: 2, opacity: .7, interactive: false }));
+  for (const [la, lo, k, n] of d.P) {
+    const m = L.circleMarker([la, lo], { radius: 4, color: KIND[k][0], weight: 1, fillColor: KIND[k][0], fillOpacity: .85 });
+    m.bindTooltip((n || '（冇名）') + ' · ' + KIND[k][1]); layer.addLayer(m);
+  }
+  const n = k => d.P.filter(p => p[2] === k).length;
+  $('cRest').textContent = n('restaurant'); $('cFast').textContent = n('fast_food'); $('cCafe').textContent = n('cafe'); $('cShop').textContent = n('shop');
+  $('cHome').textContent = d.H.length; $('cNode').textContent = d.N.length / 2;
+  $('cWhen').textContent = new Date(d.t).toLocaleDateString('zh-HK');
+  $('tCity').textContent = c.name;
+}
+
+function overlay(html) { $('ovCard').innerHTML = html; $('overlay').hidden = !html; }
+async function start(force) {
+  overlay('<div class="spin"></div><h2>載入地圖中</h2><p>第一次開要由 OpenStreetMap 抓資料，大約十幾秒。</p>');
+  try { draw(await loadCity(cityId, force)); overlay(''); }
+  catch (e) {
+    console.warn('map load failed', e);
+    overlay('<h2>地圖載入失敗</h2><p>OpenStreetMap 資料暫時抓唔到，可能係網絡問題或者伺服器太忙。</p><button class="pri" id="bRetry">重試</button>');
+    $('bRetry').onclick = () => start(force);
+  }
+}
+$('bReload').onclick = () => start(true);
+$('grip').onclick = () => $('side').classList.toggle('open');
+start(false);
+})();
+</script>
+</body>
+</html>
