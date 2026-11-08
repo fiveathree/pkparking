@@ -112,11 +112,11 @@ function start(o) {
     const dx = s.bx - s.ax, dy = s.by - s.ay, l = Math.hypot(dx, dy); if (l < 10) continue;
     const ux = dx / l, uy = dy / l, ang = Math.atan2(dy, dx);
     for (const side of [-1, 1]) for (let t = 3; t < l - 3;) {
-      const bw = rnd(8, 15), bd = rnd(8, 18), off = s.hw + 2.5 + bd / 2;
+      const bw = rnd(8, 15), bd = rnd(8, 18), off = s.hw + 3.5 + bd / 2;   // 3.5 m pavement so corners can be cut a little
       const cx = s.ax + ux * (t + bw / 2) - uy * side * off, cy = s.ay + uy * (t + bw / 2) + ux * side * off;
       t += bw + rnd(.5, 2.5);
       const corners = [[1, 1], [1, -1], [-1, 1], [-1, -1], [0, 0]].map(([i, j]) => [cx + ux * bw / 2 * i - uy * bd / 2 * j, cy + uy * bw / 2 * i + ux * bd / 2 * j]);
-      if (corners.some(([x, y]) => offRoad(x, y) < 1)) continue;
+      if (corners.some(([x, y]) => offRoad(x, y) < 2)) continue;
       const cellsCovered = []; for (let i = -bw / 2; i <= bw / 2; i += 3) for (let j = -bd / 2; j <= bd / 2; j += 3) cellsCovered.push(occKey(cx + ux * i - uy * j, cy + uy * i + ux * j));
       if (cellsCovered.some(k => occ.has(k))) continue;
       cellsCovered.forEach(k => occ.add(k));
