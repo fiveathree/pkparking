@@ -118,6 +118,17 @@ button.pri{background:var(--brand);border-color:var(--brand);color:#fff}
 #park{position:fixed;inset:0;width:100%;height:100%;border:0;z-index:1500;background:#000}
 #park[hidden]{display:none}
 .speed.lock{opacity:.4;pointer-events:none}
+.cities{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:8px}
+.city{background:#1a1e27;border:1px solid var(--line);border-radius:10px;padding:12px;display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:center}
+.city h3{font-size:17px}
+.city p{grid-column:1;color:var(--dim);font-size:12px;margin:0;line-height:1.5}
+.city .btns{grid-column:2;grid-row:1/3;display:flex;flex-direction:column;gap:6px}
+.city .btns button{padding:6px 10px;font-size:12px}
+#rain{position:absolute;inset:0;z-index:450;pointer-events:none;opacity:0;transition:opacity 1s;
+  background:repeating-linear-gradient(105deg,rgba(150,180,255,.0) 0 14px,rgba(150,180,255,.16) 14px 15px);background-size:60px 60px;animation:rain .5s linear infinite}
+#rain.on{opacity:1}#rain.storm{opacity:1;background-color:rgba(40,60,90,.25);animation-duration:.25s}
+@keyframes rain{to{background-position:-16px 60px}}
+#tCityBtn{all:unset;cursor:pointer;display:flex;gap:5px;align-items:center;font-family:var(--mono)}
 #side .grip{display:none;width:100%;text-align:center;color:var(--dim);font-size:12px;cursor:pointer;padding-bottom:4px;background:none;border:0}
 @media (max-width:760px){
   #app{grid-template-columns:1fr}
@@ -135,7 +146,8 @@ button.pri{background:var(--brand);border-color:var(--brand);color:#fff}
 <div id="app">
   <header id="top">
     <a class="logo" href="../">外送風雲</a>
-    <span class="stat hideS">📍<b id="tCity">高雄</b></span>
+    <span class="stat hideS"><button id="tCityBtn" title="換城市">📍<b id="tCity">高雄</b></button></span>
+    <span class="stat" id="tWx" title="天氣">☀️</span>
     <span class="stat"><b id="tDay">第 1 日</b> <b id="tClock">06:00</b></span>
     <span class="speed" id="speed"><button data-s="0">❚❚</button><button data-s="1" class="on">×1</button><button data-s="2">×2</button><button data-s="4">×4</button></span>
     <span class="sp"></span>
@@ -143,7 +155,7 @@ button.pri{background:var(--brand);border-color:var(--brand);color:#fff}
     <span class="stat">⭐<b id="tRate">4.50</b></span>
     <button id="tBurst" class="burst" hidden>⚠ 爆單</button>
   </header>
-  <div id="map"></div>
+  <div id="map"><div id="rain"></div></div>
   <aside id="side">
     <button class="grip" id="grip">▲ 今日數字／外送員</button>
     <section id="alerts" hidden>
@@ -202,7 +214,9 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 // ---------- cities ----------
 // bbox about 2 km x 2 km round the centre; cur = money symbol, k = price scale vs Taiwan
 const CITIES = {
-  khh: { name: '高雄', center: [22.6245, 120.3010], half: [0.009, 0.00975], cur: 'NT$', k: 1, veh: 'moto' },
+  khh: { name: '高雄', center: [22.6245, 120.3010], half: [0.009, 0.00975], cur: 'NT$', k: 1, veh: 'moto', area: '新堀江／中央公園一帶', vehName: '機車' },
+  tpe: { name: '台北', center: [25.0470, 121.5140], half: [0.009, 0.00975], cur: 'NT$', k: 1, veh: 'moto', area: '西門町／中山一帶', vehName: '機車' },
+  hk: { name: '香港', center: [22.3160, 114.1705], half: [0.009, 0.00975], cur: 'HK$', k: .33, veh: 'both', area: '旺角／油麻地一帶', vehName: '汽車＋電單車' },
 };
 let cityId = 'khh';
 
@@ -233,7 +247,8 @@ function compact(json) {
       continue;
     }
     const p = e.type === 'node' ? e : e.center; if (!p) continue;
-    const kind = t.amenity || (t.shop ? 'shop' : null);
+    const kind = /^(restaurant|fast_food|cafe)$/.test(t.amenity) ? t.amenity : /^(supermarket|convenience)$/.test(t.shop) ? 'shop' : null;
+    if (!kind && !/^(residential|apartments)$/.test(t.building)) continue;
     if (kind) P.push([r5(p.lat), r5(p.lon), kind, t['name:zh'] || t.name || '']);
     else if (t.building) H.push([r5(p.lat), r5(p.lon)]);
   }
@@ -345,6 +360,16 @@ function kindWeight(kind, h) {
   return .5;   // supermarket / convenience
 }
 const ratingMul = () => clamp((S.rating - 2) / 2.5, .25, 1.2);
+// weather: one plan per day. Rain: a few hours, orders +40%, couriers −20%. Typhoon: all day, announced the day before.
+const WX = { sun: { icon: '☀️', name: '天晴', orders: 1, speed: 1 }, rain: { icon: '🌧', name: '落雨', orders: 1.4, speed: .8 }, typhoon: { icon: '🌀', name: '颱風', orders: 1.8, speed: .6 } };
+const wxNow = () => S.wx && S.t >= S.wx.from && S.t < S.wx.to ? S.wx.type : 'sun';
+function rollWeather() {
+  if (S.nextTyphoon) S.wx = { type: 'typhoon', from: DAY_START, to: DAY_END };
+  else if (Math.random() < .3) { const from = Math.round(rand(8, 20)) * 60; S.wx = { type: 'rain', from, to: Math.min(DAY_END, from + Math.round(rand(2, 5)) * 60) }; }
+  else S.wx = { type: 'sun', from: 0, to: 0 };
+  S.nextTyphoon = S.wx.type !== 'typhoon' && Math.random() < .06;
+}
+const wxText = () => S.wx.type === 'sun' ? '☀️ 全日天晴' : S.wx.type === 'typhoon' ? '🌀 颱風：全日單量 ×1.8，外送員慢 40%' : `🌧 ${hhmm(S.wx.from)}–${hhmm(S.wx.to)} 落雨：單量 +40%，外送員慢 20%`;
 
 function newDayStats() { return { done: 0, onTime: 0, late: 0, cancel: 0, blocked: 0, surge: 0, revenue: 0, cost: 0, rating0: S.rating }; }
 
@@ -426,7 +451,7 @@ function dispatch() {
 // walk along the current path; returns true on arrival
 function move(c, gmin) {
   if (!c.path) return true;
-  c.d = Math.min(c.plen, c.d + SPEED_MPM * c.spd * gmin);
+  c.d = Math.min(c.plen, c.d + SPEED_MPM * c.spd * WX[wxNow()].speed * gmin);
   let left = c.d;
   for (let i = 1; i < c.path.length; i++) {
     const [ax, ay] = c.path[i - 1], [bx, by] = c.path[i], sl = Math.hypot(bx - ax, by - ay);
@@ -468,7 +493,7 @@ function dismiss(c) { S.couriers.splice(S.couriers.indexOf(c), 1); if (c.mk) liv
 function step(gmin) {
   S.t += gmin;
   // new orders: expected count this slice, drawn one by one
-  S.carry = (S.carry || 0) + hourRate(S.t / 60) * ratingMul() * (places.filter(p => p.on).length / Math.max(1, places.length)) * gmin / 60;
+  S.carry = (S.carry || 0) + hourRate(S.t / 60) * WX[wxNow()].orders * ratingMul() * (places.filter(p => p.on).length / Math.max(1, places.length)) * gmin / 60;
   while (S.carry >= 1) { S.carry--; spawnOrder(); }
   if (Math.random() < S.carry * .02) { S.carry = 0; spawnOrder(); }
   // customers give up on food that has not left the shop 15 min after the promised time
@@ -524,6 +549,9 @@ function drawUi(force) {
   const now = performance.now(); if (!force && now - lastUi < 250) return; lastUi = now;
   const T = S.today, wait = S.orders.filter(o => o.st === 'wait').length, act = S.orders.filter(o => o.st === 'taken').length;
   $('tDay').textContent = '第 ' + S.day + ' 日'; $('tClock').textContent = hhmm(S.t);
+  const wn = wxNow(), soon = S.wx.type !== 'sun' && wn === 'sun' && S.t < S.wx.from;
+  $('tWx').textContent = WX[wn].icon + (soon ? ' ' + hhmm(S.wx.from) + ' ' + WX[S.wx.type].icon : ''); $('tWx').title = wxText();
+  $('rain').className = wn === 'typhoon' ? 'storm' : wn === 'rain' ? 'on' : '';
   $('tMoney').textContent = money(S.money); $('tRate').textContent = S.rating.toFixed(2);
   $('sDone').textContent = T.done; $('sOnTime').textContent = T.done ? Math.round(T.onTime / T.done * 100) + '%' : '–';
   $('sWait').textContent = wait; $('sActive').textContent = act; $('sCancel').textContent = T.cancel;
@@ -603,15 +631,21 @@ document.addEventListener('click', e => {
 const ME = { name: '你', self: true };
 const PARK_LEVELS = { moto: { dir: 'tw', n: 5 }, car: { dir: 'hk', n: 6 } };
 let self = null, prevSpeed = 1;
-function startSelf(o) {
+function startSelf(o, veh) {
   if (self) return;
+  if (!veh && CITIES[cityId].veh === 'both') {
+    overlay(`<h2>親自出馬</h2><p>揸咩車去？</p><div style="display:flex;gap:8px;justify-content:center"><button class="pri" data-veh="moto">電單車（泊機車格）</button><button class="pri" data-veh="car">私家車（窄位泊車）</button></div><p style="margin-top:12px"><button id="bVehNo">唔去住</button></p>`);
+    $('ovCard').onclick = e => { const b = e.target.closest('[data-veh]'); if (b) { $('ovCard').onclick = null; overlay(''); startSelf(o, b.dataset.veh); } else if (e.target.id === 'bVehNo') { $('ovCard').onclick = null; overlay(''); } };
+    return;
+  }
+  veh = veh || CITIES[cityId].veh;
   o.st = 'taken'; o.c = ME;
   // system estimate: an ordinary courier on the best route, with the usual wait at big junctions; you ride 15% faster, so dodging jams beats it
   const route0 = routeNodes(o.p.node, o.home.node), est = lenOf(route0.map(n => [G.x[n], G.y[n]])) / SPEED_MPM + route0.filter(n => G.adj[n].length >= 4).length * .3 * .85;
   // a couple of traffic jams sitting on or near the suggested route
   const jams = [];
   for (let i = 0; i < 2 && route0.length > 6; i++) { const n = route0[Math.floor(route0.length * rand(.25, .8))]; jams.push({ x: G.x[n] + rand(-60, 60), y: G.y[n] + rand(-60, 60), r: rand(90, 150) }); }
-  self = { o, phase: S.t < o.ready ? 'wait' : 'drive', u: o.p.node, v: null, d: 0, len: 0, queued: null, t0: S.t, est, jams, red: 0, ev: '', mk: null, gps: null, jl: [] };
+  self = { o, veh, phase: S.t < o.ready ? 'wait' : 'drive', u: o.p.node, v: null, d: 0, len: 0, queued: null, t0: S.t, est, jams, red: 0, ev: '', mk: null, gps: null, jl: [] };
   self.jl = jams.map(j => L.circle(G.toLL(j.x, j.y), { radius: j.r, color: '#ff5d5d', weight: 1, fillColor: '#ff5d5d', fillOpacity: .18, interactive: false }).addTo(liveLayer));
   self.mk = L.circleMarker(o.p.ll, { radius: 9, weight: 3, color: '#ffffff', fillColor: '#f2c53d', fillOpacity: 1, interactive: false }).addTo(liveLayer);
   self.gps = L.polyline([], { color: '#b6adff', weight: 4, opacity: .8, dashArray: '6 8', interactive: false }).addTo(liveLayer);
@@ -647,7 +681,7 @@ function selfStep(g) {
   const px = G.x[s.u] + (G.x[s.v] - G.x[s.u]) * s.d / s.len, py = G.y[s.u] + (G.y[s.v] - G.y[s.u]) * s.d / s.len;
   const jam = s.jams.some(j => Math.hypot(px - j.x, py - j.y) < j.r);
   if (!s.ev.startsWith('🚦')) s.ev = jam ? '🚗 塞車，慢咗好多' : '';
-  s.d += SPEED_MPM * 1.15 * (jam ? .5 : 1) * g;
+  s.d += SPEED_MPM * 1.15 * WX[wxNow()].speed * (jam ? .5 : 1) * g;
   while (s.d >= s.len) {
     s.d -= s.len;
     if (s.v === s.o.home.node) { arrive(); return; }
@@ -669,7 +703,7 @@ function arrive() {
   const s = self; s.phase = 'park'; s.routeT = S.t - s.t0; s.driveT = S.t - s.td; s.ev = '';
   // harder parking where the street is busier (night-market / old-district feel)
   const dens = places.filter(p => p.cell === cells[cellAt(G.x[s.o.home.node], G.y[s.o.home.node])]?.i).length;
-  const pk = PARK_LEVELS[CITIES[cityId].veh], lv = Math.min(pk.n - 1, dens >= 15 ? 3 + Math.floor(Math.random() * 2) : dens >= 6 ? 1 + Math.floor(Math.random() * 2) : 0);
+  const pk = PARK_LEVELS[s.veh], lv = Math.min(pk.n - 1, dens >= 15 ? 3 + Math.floor(Math.random() * 2) : dens >= 6 ? 1 + Math.floor(Math.random() * 2) : 0);
   $('park').src = '../' + pk.dir + '/?challenge=1&level=' + lv; $('park').hidden = false; $('selfBar').hidden = true;
 }
 addEventListener('message', e => {
@@ -732,6 +766,7 @@ function openMarket() {
   overlay(`<h2>人力市場 <button class="info" data-info="market">i</button></h2>
     <div class="tabs"><button data-tab="hire" class="${mTab === 'hire' ? 'on' : ''}">請人（${S.market.length}）</button><button data-tab="staff" class="${mTab === 'staff' ? 'on' : ''}">現有人手（${S.couriers.length}）</button></div>
     <div class="mlist">${mTab === 'hire' ? hire : staff}</div>
+    <p style="font-size:13px;color:var(--ink);margin:10px 0 0;flex:none">今日天氣：${wxText()}</p>
     <div class="mfoot"><span>💰${money(S.money)}　今日日薪 ${money(wages)}</span><button class="pri" id="bGo">開始第 ${S.day} 日</button></div>`, 'market');
   $('bGo').onclick = startDay;
 }
@@ -778,11 +813,10 @@ function endDay() {
     <tr><td>淨利</td><td class="${cls(net)}">${money(net)}</td></tr>
     <tr><td>評分變化</td><td class="${cls(dr)}">${(dr >= 0 ? '+' : '') + dr.toFixed(2)}（${S.rating.toFixed(2)}）</td></tr>
     ${left || back ? `<tr><td>餐廳變動</td><td>${back ? '+' + back + ' 加入 ' : ''}${left ? '−' + left + ' 退出' : ''}</td></tr>` : ''}
-  </table><button class="pri" id="bNext">去人力市場</button>`);
-  $('bNext').onclick = () => {
-    S.day++; S.t = DAY_START; S.orders.forEach(o => o.mk && liveLayer.removeLayer(o.mk)); S.orders = []; S.recent = [];
-    S.market = Array.from({ length: 6 }, newCandidate); mTab = 'hire'; openMarket();
-  };
+  </table>${S.nextTyphoon ? '<p style="color:var(--warn)">🌀 天文台預告：聽日颱風，單量會好誇張，記得多請人。</p>' : ''}<p style="font-size:12px">已自動儲存</p><button class="pri" id="bNext">去人力市場</button>`);
+  S.day++; S.t = DAY_START; S.orders.forEach(o => o.mk && liveLayer.removeLayer(o.mk)); S.orders = []; S.recent = [];
+  S.market = Array.from({ length: 6 }, newCandidate); rollWeather(); save();
+  $('bNext').onclick = () => { mTab = 'hire'; openMarket(); };
 }
 
 let last = 0;
@@ -816,23 +850,64 @@ function setupWorld(d) {
     const lbl = L.marker([ne[0], sw[1]], { interactive: false, keyboard: false }); lbl.html = ''; baseLayer.addLayer(lbl);
     cells.push({ i, col, row: grid.rows - 1 - r, node: G.snap(cx, cy), min: 0, lbl, rect, surge: null, stop: 0, look: '' });
   }
-  places = d.P.map(([la, lo, kind, name]) => { const [px, py] = G.toXY(la, lo); return { ll: [la, lo], node: G.snap(px, py), cell: cellAt(px, py), kind, name, on: true }; });
+  places = d.P.filter(p => KIND[p[2]]).map(([la, lo, kind, name]) => { const [px, py] = G.toXY(la, lo); return { ll: [la, lo], node: G.snap(px, py), cell: cellAt(px, py), kind, name, on: true }; });
   homes = d.H.map(([la, lo]) => ({ ll: [la, lo], node: G.snap(...G.toXY(la, lo)) }));
   for (const p of places) {
     const m = L.circleMarker(p.ll, { radius: 3, color: KIND[p.kind][0], weight: 0, fillColor: KIND[p.kind][0], fillOpacity: .5 });
     m.bindTooltip((p.name || '（冇名）') + '・' + KIND[p.kind][1]); baseLayer.addLayer(m);
   }
-  heat = L.heatLayer([], { radius: 28, blur: 24, maxZoom: 16, minOpacity: .25, gradient: { .3: '#3b2f8f', .6: '#ff5d5d', 1: '#ffd166' } }).addTo(baseLayer);
-  // starting crew: 8 couriers on commission, no zone
-  S.couriers = []; S.orders = []; S.today = newDayStats();
-  for (let i = 0; i < 8; i++) S.couriers.push(newCourier(pick(places).node));
-  S.market = Array.from({ length: 6 }, newCandidate);
+  // one heat layer for the whole session: removing it while a redraw is queued throws inside leaflet.heat
+  if (!heat) heat = L.heatLayer([], { radius: 28, blur: 24, maxZoom: 16, minOpacity: .25, gradient: { .3: '#3b2f8f', .6: '#ff5d5d', 1: '#ffd166' } }).addTo(map);
+  heat.setLatLngs([]);
+  S.couriers = []; S.orders = []; S.recent = []; S.t = DAY_START;
+  const sv = readSave().cities[cityId];
+  if (sv) {
+    Object.assign(S, { day: sv.day, money: sv.money, rating: sv.rating, comm: sv.comm, market: sv.market, wx: sv.wx, nextTyphoon: sv.nextTyphoon });
+    for (const c of sv.couriers) { const n = newCourier(pick(places).node, c); S.couriers.push(n); if (c.zone != null && cells[c.zone]) station(n, c.zone); }
+    sv.mins.forEach((m, i) => { if (cells[i]) cells[i].min = m; });
+    sv.off.forEach(i => { if (places[i]) places[i].on = false; });
+  } else {
+    // new game: 8 couriers on commission, no zone, fine weather on day one
+    Object.assign(S, { day: 1, money: Math.round(20000 * c.k / 100) * 100, rating: 4.5, comm: 25, wx: { type: 'sun', from: 0, to: 0 }, nextTyphoon: false });
+    for (let i = 0; i < 8; i++) S.couriers.push(newCourier(pick(places).node));
+    S.market = Array.from({ length: 6 }, newCandidate);
+  }
+  S.today = newDayStats(); $('comm').value = S.comm;
   $('tCity').textContent = c.name;
   $('legend').innerHTML = Object.values(STATE).map(([col, n]) => `<span><i class="dot" style="background:${col}"></i>${n}</span>`).join('') + '<span><i class="dot" style="border:2px solid #ff5d5d"></i>冇人接</span>';
   drawLive(); drawUi(true);
 }
 
 function overlay(html, cls) { $('ovCard').className = 'card' + (cls ? ' ' + cls : ''); $('ovCard').innerHTML = html; $('overlay').hidden = !html; }
+// ---------- save (one key, a slot per city) ----------
+const SAVE_KEY = 'wsfy-save';
+function readSave() { try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); if (s && s.cities) return s; } catch {} return { cur: null, cities: {} }; }
+function save() {
+  const all = readSave();
+  all.cur = cityId;
+  all.cities[cityId] = { day: S.day, money: Math.round(S.money), rating: S.rating, comm: S.comm, market: S.market, wx: S.wx, nextTyphoon: S.nextTyphoon,
+    couriers: S.couriers.filter(c => !c.gig).map(c => ({ name: c.name, spd: c.spd, rel: c.rel, end: c.end, pay: c.pay, wage: c.wage, zone: c.zone })),
+    mins: cells.map(k => k.min), off: places.map((p, i) => p.on ? -1 : i).filter(i => i >= 0) };
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(all)); } catch {}
+}
+function pickCity(note) {
+  S.speed = 0; markSpeed();
+  const sv = readSave();
+  overlay(`<h2>外送風雲</h2><p style="margin-bottom:10px">揀一個城市做中央調度。${note || ''}</p><div class="cities">${Object.entries(CITIES).map(([id, c]) => { const s = sv.cities[id];
+    return `<div class="city"><h3>${c.name}</h3><span class="btns"><button class="pri" data-city="${id}">${s ? '繼續' : '開始'}</button>${s ? `<button data-reset="${id}">重新開始</button>` : ''}</span>
+      <p>${c.area}・${c.vehName}<br>${s ? `第 ${s.day} 日・💰${c.cur}${s.money.toLocaleString('en-US')}・⭐${s.rating.toFixed(2)}` : '新遊戲'}</p></div>`; }).join('')}</div>`, 'market');
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-city],[data-reset]'); if (!b) return;
+  if (b.dataset.reset) {
+    if (!confirm(CITIES[b.dataset.reset].name + '嘅存檔會刪除，由第 1 日重新開始？')) return;
+    const all = readSave(); delete all.cities[b.dataset.reset]; try { localStorage.setItem(SAVE_KEY, JSON.stringify(all)); } catch {}
+    return pickCity();
+  }
+  if (self) endSelf();
+  cityId = b.dataset.city; sel = null; start(false);
+});
+$('tCityBtn').onclick = () => pickCity('今日未收工嘅進度唔會儲存。');
 async function start(force) {
   overlay('<div class="spin"></div><h2>載入地圖中</h2><p>第一次開要由 OpenStreetMap 抓資料，大約十幾秒。</p>');
   try { setupWorld(await loadCity(cityId, force)); openMarket(); }
@@ -866,8 +941,8 @@ document.addEventListener('click', e => {
   pop.style.top = (r.top > pop.offsetHeight + 20 ? r.top - pop.offsetHeight - 8 : r.bottom + 8) + 'px';
 });
 
-if (location.hash === '#dev') window.wsfy = { S, step, endDay, startDay, drawLive, drawUi, rebalance, station, startSelf, selfStep, drawSelf, get self() { return self; }, get cells() { return cells; } };   // test hook: fast-forward from the console
-start(false);
+if (location.hash === '#dev') window.wsfy = { S, save, readSave, rollWeather, step, endDay, startDay, drawLive, drawUi, rebalance, station, startSelf, selfStep, drawSelf, get self() { return self; }, get cells() { return cells; } };   // test hook: fast-forward from the console
+{ const cur = readSave().cur; if (cur && CITIES[cur]) { cityId = cur; start(false); } else pickCity(); }
 requestAnimationFrame(frame);
 })();
 </script>
