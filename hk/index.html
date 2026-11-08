@@ -246,10 +246,17 @@ let camMode = 'top', soundOn = true, lookYaw = 0, lookDrag = false;
 const keys = {};
 let progress = {};
 try { progress = JSON.parse(localStorage.getItem('zwp-progress') || '{}') || {}; } catch (e) { progress = {}; }
+// challenge mode (?challenge=1&level=0&par=45): opened by the delivery game in an iframe.
+// One level, no menu, progress untouched, result posted to the parent page.
+const Q = new URLSearchParams(location.search);
+const CH = Q.get('challenge') === '1' ? { level: Math.max(0, +Q.get('level') || 0), par: +Q.get('par') || 0 } : null;
+const report = (ok, stars, damage) => parent.postMessage({ type: 'parking-result', ok, time: +tElapsed.toFixed(1), stars, damage }, location.origin);
+const CH_TIP = '<p class="tipline" style="color:var(--paint)">送餐中：泊好車先交到貨。</p>';
+
 const saveProgress = () => { try { localStorage.setItem('zwp-progress', JSON.stringify(progress)); } catch (e) {} };
 
 function loadLevel(i) {
-  lvIdx = i; L = LEVELS[i]();
+  lvIdx = i; L = LEVELS[i](); if (CH && CH.par) L.par = CH.par;
   car = { x: L.start.x, y: L.start.y, a: L.start.a, v: 0 };
   gear = 'P'; wheel = 0; gas = brake = false; tElapsed = 0; started = false; hits = 0; contact = false; holdT = 0; shake = 0; flash = 0; lookYaw = 0;
   $('lvCode').textContent = L.code; $('lvName').textContent = L.name;
@@ -685,6 +692,7 @@ const stars = n => '★'.repeat(n) + '<s>' + '★'.repeat(3 - n) + '</s>';
 function endWin() {
   mode = 'clear'; beep(880, .12, .08); setTimeout(() => beep(1320, .2, .08), 130);
   const n = hits === 0 && tElapsed <= L.par ? 3 : hits <= 1 ? 2 : 1;
+  if (CH) { report(true, n, hits); showOverlay(`<div class="card result"><h2>泊好！交貨中…</h2><div class="big">${stars(n)}</div></div>`); return; }
   progress[L.code] = Math.max(progress[L.code] || 0, n); saveProgress();
   const next = lvIdx + 1 < LEVELS.length;
   showOverlay(`<div class="card result">
@@ -696,6 +704,7 @@ function endWin() {
 }
 function endFail() {
   mode = 'fail';
+  if (CH) { report(false, 0, hits); showOverlay('<div class="card result"><h2>車身花晒</h2><p class="tipline">呢單送唔到，返調度中心。</p></div>'); return; }
   showOverlay(`<div class="card result">
     <h2>車身花晒</h2>
     <p class="tipline">撞咗 ${MAX_HITS} 下。試下開近鏡、慢慢搓，靠車頭車尾雷達同倒車輔助線。</p>
@@ -719,8 +728,8 @@ function showIntro() {
   showOverlay(`<div class="card result">
     <div class="brand"><div class="stripe"></div></div>
     <h2>${L.code} ${L.name}</h2>
-    <p class="tipline">${L.tip}</p>
-    <div class="btns"><button class="btn" data-act="go">開車</button><button class="btn ghost" data-act="menu">選關</button></div>
+    <p class="tipline">${L.tip}</p>${CH ? CH_TIP : ''}
+    <div class="btns"><button class="btn" data-act="go">開車</button><button class="btn ghost" data-act="menu">${CH ? '放棄' : '選關'}</button></div>
   </div>`);
   mode = 'intro';
 }
@@ -733,7 +742,7 @@ $('ov').addEventListener('click', e => {
   if (act === 'go') { $('ov').hidden = true; mode = 'play'; }
   if (act === 'retry') { loadLevel(lvIdx); }
   if (act === 'next') { loadLevel(lvIdx + 1); showIntro(); }
-  if (act === 'menu') showMenu();
+  if (act === 'menu') CH ? giveUp() : showMenu();
 });
 
 // ---------- input ----------
@@ -762,15 +771,17 @@ pedal($('gas'), v => gas = v); pedal($('brake'), v => brake = v);
 $('bCenter').addEventListener('click', () => setWheel(0));
 $('bCam').addEventListener('click', () => toggleCam());
 $('bSnd').addEventListener('click', () => { soundOn = !soundOn; $('bSnd').textContent = soundOn ? '聲 開' : '聲 關'; });
-$('bRetry').addEventListener('click', () => { if (L) loadLevel(lvIdx); });
-$('bMenu').addEventListener('click', showMenu);
+$('bRetry').addEventListener('click', () => { if (L && !CH) loadLevel(lvIdx); });
+$('bMenu').addEventListener('click', () => CH ? giveUp() : showMenu());
+function giveUp() { if (mode === 'clear' || mode === 'fail') return; mode = 'fail'; report(false, 0, hits); }
+if (CH) { $('bRetry').hidden = true; $('bMenu').textContent = '放棄'; $('bMenu').title = '放棄呢單'; }
 window.addEventListener('keydown', e => {
   audio();
   if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault();
   keys[e.code] = true;
   if (mode !== 'play') return;
   if (e.code === 'KeyQ') setGear('R'); if (e.code === 'KeyE') setGear('D'); if (e.code === 'KeyF') setGear('P'); if (e.code === 'KeyN') setGear('N');
-  if (e.code === 'KeyC') setWheel(0); if (e.code === 'KeyV') toggleCam(); if (e.code === 'KeyR') loadLevel(lvIdx);
+  if (e.code === 'KeyC') setWheel(0); if (e.code === 'KeyV') toggleCam(); if (e.code === 'KeyR' && !CH) loadLevel(lvIdx);
 });
 window.addEventListener('keyup', e => { keys[e.code] = false; });
 window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; gas = brake = false; });
@@ -799,7 +810,7 @@ function frame(now) {
   const end = () => { pid = null; lookDrag = false; };
   cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
 }
-const boot = () => { loadLevel(0); showMenu(); layout(); requestAnimationFrame(frame); };
+const boot = () => { if (CH) { loadLevel(Math.min(CH.level, LEVELS.length - 1)); showIntro(); } else { loadLevel(0); showMenu(); } layout(); requestAnimationFrame(frame); };
 (document.fonts && document.fonts.ready ? Promise.race([document.fonts.ready, new Promise(r => setTimeout(r, 1500))]) : Promise.resolve()).then(boot);
 })();
 </script>

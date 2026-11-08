@@ -276,6 +276,13 @@ const camPos = new T.Vector3(0, 8, 12), camLook = new T.Vector3();
 let progress = {};
 try { progress = JSON.parse(localStorage.getItem('jcg-progress') || '{}') || {}; } catch (e) {}
 const saveProgress = () => { try { localStorage.setItem('jcg-progress', JSON.stringify(progress)); } catch (e) {} };
+// challenge mode (?challenge=1&level=0&par=45): opened by the delivery game in an iframe.
+// One level, no menu, progress untouched, result posted to the parent page.
+const Q = new URLSearchParams(location.search);
+const CH = Q.get('challenge') === '1' ? { level: Math.max(0, +Q.get('level') || 0), par: +Q.get('par') || 0 } : null;
+const report = (ok, stars, damage) => parent.postMessage({ type: 'parking-result', ok, time: +tElapsed.toFixed(1), stars, damage }, location.origin);
+const CH_TIP = '<p class="tip" style="margin-top:8px">送餐中：泊好車先交到貨。</p>';
+
 
 const COLORS = [0xe9e4d6, 0x2b2f38, 0x8a9099, 0xb8322b, 0x3b5d8f, 0xd8c39a, 0x5c6b4e, 0xf0f0f0, 0x6f3f6b, 0x8fb6c9, 0x1f4a44, 0xc96f2e];
 const SHOPS = [['鹹酥雞', '#d93a2b'], ['珍珠奶茶', '#2f7d5b'], ['早餐店', '#e0a524'], ['機車行', '#2b5fa8'], ['藥局', '#2a9a6a'], ['滷味', '#b4442a'],
@@ -711,6 +718,7 @@ function win() {
   phase = 'clear'; chime();
   const blocking = scooters.filter(s => s !== own && inSlotIdx(s) < 0).length;
   const pen = tipped + blocking, n = pen === 0 && tElapsed <= L.par ? 3 : pen <= 1 ? 2 : 1;
+  if (CH) { report(true, n, pen); showOverlay(`<div class="card res"><h2>泊好！交貨中…</h2><div class="big">${starStr(n)}</div></div>`); return; }
   const key = 'L' + lvIdx; progress[key] = Math.max(progress[key] || 0, n); saveProgress();
   const next = lvIdx + 1 < LEVELS.length;
   showOverlay(`<div class="card res"><h2>泊好！</h2><div class="big">${starStr(n)}</div>
@@ -730,8 +738,8 @@ function showMenu() {
 }
 function showIntro() {
   phase = 'intro';
-  showOverlay(`<div class="card res"><div class="brand"><div class="slots"></div></div><h2>No.${lvIdx + 1} ${L.name}</h2><p class="tip">${L.tip}</p>
-    <div class="btns"><button class="btn" data-act="go">出發</button><button class="btn ghost" data-act="menu">選關</button></div></div>`);
+  showOverlay(`<div class="card res"><div class="brand"><div class="slots"></div></div><h2>No.${lvIdx + 1} ${L.name}</h2><p class="tip">${L.tip}</p>${CH ? CH_TIP : ''}
+    <div class="btns"><button class="btn" data-act="go">出發</button><button class="btn ghost" data-act="menu">${CH ? '放棄' : '選關'}</button></div></div>`);
 }
 function showOverlay(html) { const o = $('ov'); o.innerHTML = html; o.hidden = false; }
 $('ov').addEventListener('click', e => {
@@ -741,7 +749,7 @@ $('ov').addEventListener('click', e => {
   if (a === 'go') { $('ov').hidden = true; phase = 'play'; }
   if (a === 'retry') { buildLevel(lvIdx); $('ov').hidden = true; phase = 'play'; }
   if (a === 'next') { buildLevel(lvIdx + 1); showIntro(); }
-  if (a === 'menu') showMenu();
+  if (a === 'menu') CH ? giveUp() : showMenu();
 });
 
 // ---------- audio ----------
@@ -781,8 +789,10 @@ $('bCam').addEventListener('click', () => { camMode = { street: 'top', top: 'pov
   const end = () => { pid = null; lookDrag = false; };
   canvas.addEventListener('pointerup', end); canvas.addEventListener('pointercancel', end);
 }
-$('bRetry').addEventListener('click', () => { if (!L) return; buildLevel(lvIdx); $('ov').hidden = true; phase = 'play'; });
-$('bMenu').addEventListener('click', showMenu);
+$('bRetry').addEventListener('click', () => { if (!L || CH) return; buildLevel(lvIdx); $('ov').hidden = true; phase = 'play'; });
+$('bMenu').addEventListener('click', () => CH ? giveUp() : showMenu());
+function giveUp() { if (phase === 'clear' || phase === 'gaveup') return; phase = 'gaveup'; report(false, 0, tipped); }
+if (CH) { $('bRetry').hidden = true; $('bMenu').textContent = '放棄'; }
 function keyInput() {
   const x = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0);
   const y = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0);
@@ -815,7 +825,7 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
-const boot = () => { layout(); buildLevel(0); showMenu(); layout(); requestAnimationFrame(frame); };
+const boot = () => { layout(); if (CH) { buildLevel(Math.min(CH.level, LEVELS.length - 1)); if (CH.par) L.par = CH.par; showIntro(); } else { buildLevel(0); showMenu(); } layout(); requestAnimationFrame(frame); };
 (document.fonts && document.fonts.ready ? Promise.race([document.fonts.ready, new Promise(r => setTimeout(r, 1500))]) : Promise.resolve()).then(boot);
 })();
 </script>

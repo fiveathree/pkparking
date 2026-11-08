@@ -107,6 +107,17 @@ button.pri{background:var(--brand);border-color:var(--brand);color:#fff}
 .al .row{display:flex;gap:4px;flex-wrap:wrap;align-items:center}
 .al button{padding:4px 7px;font-size:12px}
 .cr .gig{font-size:11px;color:var(--gold);margin-left:4px}
+#selfBar{position:fixed;left:50%;bottom:64px;transform:translateX(-50%);z-index:900;width:min(520px,calc(100vw - 24px));background:rgba(21,24,32,.96);border:1px solid var(--brand);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;font-size:13px}
+#selfBar[hidden]{display:none}
+#selfBar .r{display:flex;align-items:center;gap:10px;justify-content:space-between}
+#selfBar .eta{font-family:var(--mono)}
+#selfBar .turns{display:flex;gap:6px}
+#selfBar .turns button{width:52px;font-size:18px;padding:6px 0}
+#selfBar .turns button.on{background:var(--brand);border-color:var(--brand);color:#fff}
+#selfBar .ev{color:var(--gold);min-height:18px}
+#park{position:fixed;inset:0;width:100%;height:100%;border:0;z-index:1500;background:#000}
+#park[hidden]{display:none}
+.speed.lock{opacity:.4;pointer-events:none}
 #side .grip{display:none;width:100%;text-align:center;color:var(--dim);font-size:12px;cursor:pointer;padding-bottom:4px;background:none;border:0}
 @media (max-width:760px){
   #app{grid-template-columns:1fr}
@@ -159,6 +170,8 @@ button.pri{background:var(--brand);border-color:var(--brand);color:#fff}
   <nav id="bottom">
     <label>平台抽成 <select id="comm"><option>15</option><option>20</option><option selected>25</option><option>30</option><option>35</option></select>%</label>
     <button class="info" data-info="comm">i</button>
+    <button id="bSelf" class="pri">親自出馬</button>
+    <button class="info" data-info="self">i</button>
     <button id="bHeat">熱力圖：開</button>
     <button class="info" data-info="zone">i</button>
     <span id="selBar" hidden><b id="selName"></b><button id="bUnzone">解除駐守</button><button id="bUnsel">取消揀</button></span>
@@ -169,6 +182,11 @@ button.pri{background:var(--brand);border-color:var(--brand);color:#fff}
 <div id="overlay"><div class="card" id="ovCard"><div class="spin"></div><h2>載入地圖中</h2><p>第一次開要由 OpenStreetMap 抓資料，大約十幾秒。</p></div></div>
 <div id="pop" hidden></div>
 <div id="toast"></div>
+<div id="selfBar" hidden>
+  <div class="r"><b id="sfTitle">親自出馬</b><span class="eta" id="sfEta"></span></div>
+  <div class="r"><span class="ev" id="sfEv"></span><span class="turns"><button data-turn="L" title="下個路口左轉（←）">◀</button><button data-turn="S" title="下個路口直行（↑）">▲</button><button data-turn="R" title="下個路口右轉（→）">▶</button></span></div>
+</div>
+<iframe id="park" hidden title="泊車"></iframe>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/ngraph.graph@20.0.1/dist/ngraph.graph.min.js"></script>
@@ -184,7 +202,7 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 // ---------- cities ----------
 // bbox about 2 km x 2 km round the centre; cur = money symbol, k = price scale vs Taiwan
 const CITIES = {
-  khh: { name: '高雄', center: [22.6245, 120.3010], half: [0.009, 0.00975], cur: 'NT$', k: 1 },
+  khh: { name: '高雄', center: [22.6245, 120.3010], half: [0.009, 0.00975], cur: 'NT$', k: 1, veh: 'moto' },
 };
 let cityId = 'khh';
 
@@ -266,8 +284,9 @@ function buildGraph(d) {
   const toXY = (la, lo) => [(lo - lon0) * kx, (la - lat0) * ky];
   const toLL = (px, py) => [lat0 + py / ky, lon0 + px / kx];
   const snap = (px, py) => { let bi = best[0], bd = Infinity; for (const i of best) { const dd = (x[i] - px) ** 2 + (y[i] - py) ** 2; if (dd < bd) { bd = dd; bi = i; } } return bi; };
-  G = { x, y, n, graph, finder, comp: best, toXY, toLL, snap };
+  G = { x, y, n, adj, graph, finder, comp: best, toXY, toLL, snap };
 }
+const routeNodes = (a, b) => a === b ? [a] : G.finder.find(a, b).reverse().map(nd => nd.id);
 // route between road nodes as a list of [x,y] points (ngraph returns target first)
 function route(a, b) {
   if (a === b) return [[G.x[a], G.y[a]]];
@@ -520,7 +539,7 @@ function drawUi(force) {
   const burst = cells.filter(k => (waiting.get(k.i) || 0) >= BURST && !(k.stop > S.t));
   const left = t => Math.ceil((t - S.t) / 5) * 5 + ' 分';
   const al = burst.map(k => `<div class="al"><b>${cellName(k.i)} 區：${waiting.get(k.i)} 張冇人接</b>
-      <div class="row">加錢 ${[20, 50, 100].map(p => `<button data-surge="${p}" data-z="${k.i}"${surgeOf(k.i) === p ? ' disabled' : ''}>+${p}%</button>`).join('')}<button data-stop="${k.i}">停單 30 分</button></div></div>`).join('') +
+      <div class="row">加錢 ${[20, 50, 100].map(p => `<button data-surge="${p}" data-z="${k.i}"${surgeOf(k.i) === p ? ' disabled' : ''}>+${p}%</button>`).join('')}<button data-stop="${k.i}">停單 30 分</button><button data-self="${k.i}"${self ? ' disabled' : ''}>親自出馬</button></div></div>`).join('') +
     cells.filter(k => surgeOf(k.i) || k.stop > S.t).map(k => `<div class="al act"><div class="row"><b>${cellName(k.i)}</b>${surgeOf(k.i) ? ` 加錢 +${surgeOf(k.i)}%（剩 ${left(k.surge.until)}）<button data-unsurge="${k.i}">取消</button>` : ''}${k.stop > S.t ? ` 停單（剩 ${left(k.stop)}）<button data-unstop="${k.i}">恢復</button>` : ''}</div></div>`).join('');
   if ($('alertList').dataset.h !== al) { $('alertList').dataset.h = al; $('alertList').innerHTML = al; }
   $('alerts').hidden = !al; $('tBurst').hidden = !burst.length;
@@ -578,6 +597,123 @@ document.addEventListener('click', e => {
   else if (d.unsurge) cells[+d.unsurge].surge = null;
   else cells[+d.unstop].stop = 0;
   drawUi(true);
+});
+// ---------- 親自出馬: drive on the map, then park ----------
+// the dispatch clock keeps going at ×¼ while you are out
+const ME = { name: '你', self: true };
+const PARK_LEVELS = { moto: { dir: 'tw', n: 5 }, car: { dir: 'hk', n: 6 } };
+let self = null, prevSpeed = 1;
+function startSelf(o) {
+  if (self) return;
+  o.st = 'taken'; o.c = ME;
+  // system estimate: an ordinary courier on the best route, with the usual wait at big junctions; you ride 15% faster, so dodging jams beats it
+  const route0 = routeNodes(o.p.node, o.home.node), est = lenOf(route0.map(n => [G.x[n], G.y[n]])) / SPEED_MPM + route0.filter(n => G.adj[n].length >= 4).length * .3 * .85;
+  // a couple of traffic jams sitting on or near the suggested route
+  const jams = [];
+  for (let i = 0; i < 2 && route0.length > 6; i++) { const n = route0[Math.floor(route0.length * rand(.25, .8))]; jams.push({ x: G.x[n] + rand(-60, 60), y: G.y[n] + rand(-60, 60), r: rand(90, 150) }); }
+  self = { o, phase: S.t < o.ready ? 'wait' : 'drive', u: o.p.node, v: null, d: 0, len: 0, queued: null, t0: S.t, est, jams, red: 0, ev: '', mk: null, gps: null, jl: [] };
+  self.jl = jams.map(j => L.circle(G.toLL(j.x, j.y), { radius: j.r, color: '#ff5d5d', weight: 1, fillColor: '#ff5d5d', fillOpacity: .18, interactive: false }).addTo(liveLayer));
+  self.mk = L.circleMarker(o.p.ll, { radius: 9, weight: 3, color: '#ffffff', fillColor: '#f2c53d', fillOpacity: 1, interactive: false }).addTo(liveLayer);
+  self.gps = L.polyline([], { color: '#b6adff', weight: 4, opacity: .8, dashArray: '6 8', interactive: false }).addTo(liveLayer);
+  self.dst = L.circleMarker(o.home.ll, { radius: 8, weight: 3, color: '#b6adff', fill: false, interactive: false }).addTo(liveLayer);
+  prevSpeed = S.speed || 1; S.speed = .25; markSpeed(); $('speed').classList.add('lock');
+  if (self.phase === 'drive') { self.td = S.t; nextEdge(); }
+  map.setView(o.p.ll, 17); $('selfBar').hidden = false; $('side').classList.remove('open'); drawSelf();
+}
+const turnOf = (u, v, w) => {   // signed turn angle at v going u→v→w, + = left
+  const a1 = Math.atan2(G.y[v] - G.y[u], G.x[v] - G.x[u]), a2 = Math.atan2(G.y[w] - G.y[v], G.x[w] - G.x[v]);
+  let d = a2 - a1; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return d;
+};
+function nextEdge() {
+  const s = self, at = s.v == null ? s.u : s.v, from = s.v == null ? null : s.u;
+  let opts = G.adj[at].filter(n => n !== from); if (!opts.length) opts = G.adj[at];
+  let next = null;
+  if (s.queued && from != null && opts.length > 1) {
+    const want = { L: 1, S: 0, R: -1 }[s.queued];
+    const score = n => { const t = turnOf(from, at, n); return want === 0 ? Math.abs(t) : Math.abs(t - want * Math.PI / 2); };
+    const best = opts.reduce((a, b) => score(b) < score(a) ? b : a);
+    if (want === 0 || Math.sign(turnOf(from, at, best)) === want && Math.abs(turnOf(from, at, best)) > .4) { next = best; s.queued = null; }
+  }
+  if (next == null) { const p = routeNodes(at, s.o.home.node); next = p[1] ?? opts[0]; }
+  // traffic lights at bigger junctions
+  if (from != null && G.adj[at].length >= 4 && Math.random() < .3) { s.red = rand(.5, 1.2); s.ev = '🚦 紅燈'; }
+  s.u = at; s.v = next; s.d = 0; s.len = Math.hypot(G.x[next] - G.x[at], G.y[next] - G.y[at]) || .1;
+  s.gpsPts = routeNodes(next, s.o.home.node).map(n => G.toLL(G.x[n], G.y[n]));
+}
+function selfStep(g) {
+  const s = self; if (!s || s.phase === 'park' || s.phase === 'done') return;
+  if (s.phase === 'wait') { if (S.t >= s.o.ready) { s.phase = 'drive'; s.td = S.t; nextEdge(); } return; }
+  if (s.red > 0) { s.red -= g; if (s.red <= 0) s.ev = ''; return; }
+  const px = G.x[s.u] + (G.x[s.v] - G.x[s.u]) * s.d / s.len, py = G.y[s.u] + (G.y[s.v] - G.y[s.u]) * s.d / s.len;
+  const jam = s.jams.some(j => Math.hypot(px - j.x, py - j.y) < j.r);
+  if (!s.ev.startsWith('🚦')) s.ev = jam ? '🚗 塞車，慢咗好多' : '';
+  s.d += SPEED_MPM * 1.15 * (jam ? .5 : 1) * g;
+  while (s.d >= s.len) {
+    s.d -= s.len;
+    if (s.v === s.o.home.node) { arrive(); return; }
+    nextEdge(); if (s.red > 0) { s.d = 0; return; }
+  }
+}
+function drawSelf() {
+  const s = self; if (!s) return;
+  const ll = s.v == null ? G.toLL(G.x[s.u], G.y[s.u]) : G.toLL(G.x[s.u] + (G.x[s.v] - G.x[s.u]) * s.d / s.len, G.y[s.u] + (G.y[s.v] - G.y[s.u]) * s.d / s.len);
+  s.mk.setLatLng(ll); s.gps.setLatLngs(s.v == null ? [] : [ll, ...(s.gpsPts || [])]);
+  if (s.phase === 'drive' && !map.getBounds().pad(-.25).contains(ll)) map.panTo(ll, { animate: false });
+  const used = S.t - (s.td ?? S.t);   // driving time only, so it compares with the system estimate
+  $('sfTitle').textContent = s.phase === 'wait' ? '等餐中…' : '送去 ' + (s.o.p.name || '客人') + ' 嘅單';
+  $('sfEta').textContent = (s.phase === 'wait' ? '剩 ' + Math.ceil(s.o.ready - S.t) + ' 分出餐' : '用咗 ' + used.toFixed(1) + ' 分／系統預計 ' + s.est.toFixed(1) + ' 分');
+  $('sfEv').textContent = s.ev || (s.queued ? '下個路口：' + { L: '左轉', S: '直行', R: '右轉' }[s.queued] : '跟住導航行');
+  document.querySelectorAll('[data-turn]').forEach(b => b.classList.toggle('on', b.dataset.turn === s.queued));
+}
+function arrive() {
+  const s = self; s.phase = 'park'; s.routeT = S.t - s.t0; s.driveT = S.t - s.td; s.ev = '';
+  // harder parking where the street is busier (night-market / old-district feel)
+  const dens = places.filter(p => p.cell === cells[cellAt(G.x[s.o.home.node], G.y[s.o.home.node])]?.i).length;
+  const pk = PARK_LEVELS[CITIES[cityId].veh], lv = Math.min(pk.n - 1, dens >= 15 ? 3 + Math.floor(Math.random() * 2) : dens >= 6 ? 1 + Math.floor(Math.random() * 2) : 0);
+  $('park').src = '../' + pk.dir + '/?challenge=1&level=' + lv; $('park').hidden = false; $('selfBar').hidden = true;
+}
+addEventListener('message', e => {
+  if (e.origin !== location.origin || !e.data || e.data.type !== 'parking-result' || !self || self.phase !== 'park') return;
+  const s = self, r = e.data, o = s.o, k = CITIES[cityId].k, T = S.today;
+  $('park').hidden = true; $('park').src = 'about:blank'; s.phase = 'done';
+  const parkT = (r.time || 60) * 1.5 / 60, total = s.routeT + parkT, late = !r.ok || s.t0 + total > o.due;
+  const rev = o.food * S.comm / 100 + o.fee, comp = late ? o.fee + 30 * k : 0;
+  const tip = r.ok ? Math.max(0, Math.round((30 + (r.stars === 3 ? 40 : 0) - 15 * r.damage) * k)) : 0, complaint = r.damage >= 3;
+  o.st = 'done'; T.done++; T.revenue += rev + tip; T.cost += comp; S.money += rev + tip - comp;
+  if (late) { T.late++; S.rating = clamp(S.rating - .012, 1, 5); } else { T.onTime++; S.rating = clamp(S.rating + .0015, 1, 5); }
+  if (complaint) S.rating = clamp(S.rating - .05, 1, 5);
+  overlay(`<h2>${r.ok ? '送到！' : '放棄咗，遲咗交'}</h2><table>
+    <tr><td>路上</td><td>${s.driveT.toFixed(1)} 分（系統預計 ${s.est.toFixed(1)}）</td></tr>
+    <tr><td>泊車</td><td>${r.ok ? r.time.toFixed(0) + ' 秒・' + '★'.repeat(r.stars) : '–'}</td></tr>
+    <tr><td>準時</td><td class="${late ? 'neg' : 'pos'}">${late ? '遲咗' : '準時'}</td></tr>
+    <tr><td>收入（抽成＋運費）</td><td>${money(rev)}</td></tr>
+    <tr><td>貼士</td><td>${money(tip)}</td></tr>
+    ${comp ? `<tr><td>遲到賠償</td><td class="neg">−${money(comp)}</td></tr>` : ''}
+    ${complaint ? '<tr><td>客人投訴</td><td class="neg">評分 −0.05</td></tr>' : ''}
+  </table><button class="pri" id="bBack">返調度中心</button>`);
+  $('bBack').onclick = endSelf;
+});
+function endSelf() {
+  const s = self; if (!s) return;
+  [s.mk, s.gps, s.dst, ...s.jl].forEach(l => liveLayer.removeLayer(l));
+  self = null; $('selfBar').hidden = true; $('speed').classList.remove('lock');
+  S.speed = prevSpeed; markSpeed(); overlay('');
+  const b = bboxOf(CITIES[cityId]); map.fitBounds([[b[0], b[1]], [b[2], b[3]]]);
+  drawUi(true);
+}
+function pickSelf(z) {
+  const o = S.orders.filter(o => o.st === 'wait' && (z == null || o.cell === z)).sort((a, b) => a.t0 - b.t0)[0];
+  if (!o) return toast('而家冇等緊人接嘅單');
+  startSelf(o);
+}
+$('bSelf').onclick = () => pickSelf(null);
+document.addEventListener('click', e => { const b = e.target.closest('[data-self],[data-turn]'); if (!b) return;
+  if (b.dataset.self != null) pickSelf(+b.dataset.self);
+  else if (self) { self.queued = self.queued === b.dataset.turn ? null : b.dataset.turn; drawSelf(); } });
+addEventListener('keydown', e => {
+  if (!self || self.phase !== 'drive') return;
+  const t = { ArrowLeft: 'L', ArrowUp: 'S', ArrowRight: 'R' }[e.key]; if (!t) return;
+  e.preventDefault(); self.queued = t; drawSelf();
 });
 $('tBurst').onclick = () => { $('side').classList.add('open'); $('alerts').scrollIntoView({ block: 'nearest' }); };
 $('bUnzone').onclick = () => { if (sel) { station(sel, null); drawUi(true); } };
@@ -654,8 +790,8 @@ function frame(now) {
   const dt = Math.min(.1, (now - (last || now)) / 1000); last = now;
   if (G && S.speed && $('overlay').hidden) {
     let g = dt * S.speed * GMIN_PER_SEC;
-    while (g > 0) { const s = Math.min(.25, g); step(s); g -= s; if (S.t >= DAY_END) { endDay(); break; } }
-    drawLive();
+    while (g > 0) { const s = Math.min(.25, g); step(s); selfStep(s); g -= s; if (S.t >= DAY_END && !self) { endDay(); break; } }
+    drawLive(); drawSelf();
   }
   if (G) drawUi();
   requestAnimationFrame(frame);
@@ -717,6 +853,7 @@ $('grip').onclick = () => $('side').classList.toggle('open');
 const INFO = {
   comm: '平台由每張單嘅食物價錢抽呢個百分比。抽得高每單賺多啲，但抽成高過 25%，每日收工都會有餐廳退出平台，單量跟住跌；調返 20% 或以下，退出咗嘅餐廳會慢慢返嚟。',
   zone: '地圖分成 400 米一格。將外送員拖去一格（手機：先撳外送員，再撳格），佢就駐守嗰格：優先接本格嘅單，本格冇單先接隔籬格，送完返嚟等。撳一格可以設定「最少幾多人」，冇駐守嘅外送員會自動被派去補位。揀咗外送員再撳紅圈（冇人接嘅單）就係手動改派。',
+  self: '自己接一張等緊人接嘅單（爆單警報入面撳就接嗰區嘅）。調度中心會減慢到 ×¼，但唔會停。路上會跟導航自動行，你可以預先揀下個路口左轉／直行／右轉（鍵盤 ← ↑ →）去避開塞車（紅圈）同紅燈。到咗目的地要泊車：機車用機車格地獄，汽車用窄位泊車王，街道越旺越難泊。準時有評分，三星泊車有額外貼士，推冧車／花痕會扣貼士，太多會俾人投訴。',
   burst: '某一區冇人接嘅單去到 4 張就算爆單，嗰格會變紅。加錢：嗰區每張新單俾外送員額外獎金（+20% 至 +100%），維持 60 分鐘，會有散工陸續上線幫手，加得越多嚟得越快，但每單賺少咗。停單：嗰區 30 分鐘唔接新單，冇收入，評分會輕微跌，但唔會再積遲到。',
   market: '日薪：每日開工前俾一次人工，佢當日送幾多單都唔使再俾錢，爆單日最抵。純抽成：冇底薪，每送一單先俾一次錢，淡日最抵。請返嚟嘅人會一直留低，唔要就喺「現有人手」辭退。',
 };
@@ -729,7 +866,7 @@ document.addEventListener('click', e => {
   pop.style.top = (r.top > pop.offsetHeight + 20 ? r.top - pop.offsetHeight - 8 : r.bottom + 8) + 'px';
 });
 
-if (location.hash === '#dev') window.wsfy = { S, step, endDay, startDay, drawLive, drawUi, rebalance, station, get cells() { return cells; } };   // test hook: fast-forward from the console
+if (location.hash === '#dev') window.wsfy = { S, step, endDay, startDay, drawLive, drawUi, rebalance, station, startSelf, selfStep, drawSelf, get self() { return self; }, get cells() { return cells; } };   // test hook: fast-forward from the console
 start(false);
 requestAnimationFrame(frame);
 })();
