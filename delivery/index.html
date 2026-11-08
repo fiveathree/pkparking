@@ -697,9 +697,10 @@ document.addEventListener('click', e => {
 });
 // ---------- 親自出馬: drive the street view yourself (drive.js) ----------
 // While you drive, the drive itself moves the dispatch clock: full speed ≈ a courier's pace, so one game minute
-// takes about 20 real seconds. Waiting for food at the shop runs at ×1 so you are not stuck there.
+// takes a dozen or so real seconds. Waiting for food at the shop runs at ×1 so you are not stuck there.
 const ME = { name: '你', self: true };
-const DRIVE_GMIN = .0487;   // game minutes per real second of driving
+// game minutes per real second of driving: flat out you cover ground at about 1.1 couriers' pace
+const driveGmin = veh => StreetDrive.VEH[veh].maxV / (SPEED_MPM * 1.1);
 let self = null, prevSpeed = 1;
 const VEH_NAME = { moto: '電單車', car: '私家車' };
 function startSelf(o, veh) {
@@ -734,7 +735,7 @@ function startSelf(o, veh) {
     title: i => KINDS[o.kind].icon + ' ' + (o.kind === 'ride' ? (i === 0 ? '接客' : '載客') : o.kind === 'parcel' ? (i === 0 ? '取件' : '送件') : (i === 0 ? '攞餐' : '送餐')) + '・' + VEH_NAME[veh],
     info: () => `${hhmm(S.t)}　用咗 ${(S.t - self.t0).toFixed(1)} 分／系統預計 ${est.toFixed(1)} 分　${S.t > o.due ? '已經遲咗' : '限時 ' + hhmm(o.due)}`,
     onTick: (dt, waiting) => {
-      for (let g = dt * (waiting ? GMIN_PER_SEC : DRIVE_GMIN); g > 0; g -= .25) step(Math.min(.25, g));
+      for (let g = dt * (waiting ? GMIN_PER_SEC : driveGmin(veh)); g > 0; g -= .25) step(Math.min(.25, g));
       if (o.st === 'cancel') self.drv.finish(false, '客人等太耐，取消咗');
     },
     onArrive: i => {

@@ -6,8 +6,8 @@
 const T = THREE, PI = Math.PI;
 const WIDTH = [4.5, 7, 10, 13];   // road width by class: service, street, secondary, primary
 const VEH = {
-  moto: { wb: 1.3, maxV: 13.5, acc: 4.2, steer: .6, r: .55, jam: .6, wet: [.75, .55], name: '電單車' },
-  car: { wb: 2.6, maxV: 15, acc: 3.2, steer: .55, r: 1.1, jam: .35, wet: [.9, .7], name: '私家車' },
+  moto: { wb: 1.3, maxV: 20, acc: 6.5, steer: .6, r: .55, jam: .6, wet: [.75, .55], name: '電單車' },
+  car: { wb: 2.6, maxV: 22, acc: 5.5, steer: .55, r: 1.1, jam: .35, wet: [.9, .7], name: '私家車' },
 };
 const CYCLE = 16, GREEN = 9, AMBER = 11;   // traffic light seconds: green, amber, then red to 16
 
@@ -35,6 +35,73 @@ const CSS = `
 .dv-wait[hidden]{display:none}
 @media (max-width:640px){.dv-nav{top:auto;bottom:110px;max-width:calc(100vw - 24px)}.dv-top{right:170px}.dv-mini{width:120px;height:120px}.dv-tools{top:138px;width:120px}}
 `;
+
+// ---------- low-poly vehicle models: x forward, y up, z to the right ----------
+// Parts are merged into one geometry with vertex colours, so each model is a single draw call and can be instanced.
+function part(g, color, x = 0, y = 0, z = 0, rx = 0, rz = 0) { g.rotateX(rx); g.rotateZ(rz); g.translate(x, y, z); g.userData.color = color; return g; }
+function merge(parts) {
+  const pos = [], nor = [], col = [];
+  for (const g0 of parts) {
+    const g = g0.index ? g0.toNonIndexed() : g0, p = g.attributes.position, n = g.attributes.normal, c = new T.Color(g0.userData.color);
+    for (let i = 0; i < p.count; i++) { pos.push(p.getX(i), p.getY(i), p.getZ(i)); nor.push(n.getX(i), n.getY(i), n.getZ(i)); col.push(c.r, c.g, c.b); }
+  }
+  const g = new T.BufferGeometry();
+  g.setAttribute('position', new T.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new T.Float32BufferAttribute(nor, 3)); g.setAttribute('color', new T.Float32BufferAttribute(col, 3));
+  return g;
+}
+// side profile (x, y) pushed out sideways to `depth`, centred on z = 0, with rounded edges
+function profile(pts, depth, bevel = .04) {
+  const s = new T.Shape(); pts.forEach(([x, y], i) => i ? s.lineTo(x, y) : s.moveTo(x, y));
+  const g = new T.ExtrudeGeometry(s, { depth: depth - 2 * bevel, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 2 });
+  g.translate(0, 0, -(depth - 2 * bevel) / 2); g.computeVertexNormals(); return g;
+}
+const tyre = (r, w, x, y, z) => [part(new T.CylinderGeometry(r, r, w, 18), 0x141414, x, y, z, PI / 2), part(new T.CylinderGeometry(r * .58, r * .58, w + .01, 10), 0xb8bec8, x, y, z, PI / 2)];
+const GLASS = 0x2b3d58, TRIM = 0x1d1f24;
+
+// city hatchback, 4.4 m long; `body` is the paint (white for instanced traffic, which tints it per car)
+function carGeometry(body) {
+  return merge([
+    part(profile([[-2.15, .34], [2.12, .34], [2.2, .56], [2.06, .8], [.9, .94], [-1.9, .98], [-2.18, .74]], 1.78, .07), body),   // body and bonnet
+    part(profile([[-1.62, .9], [.82, .9], [.22, 1.42], [-1.32, 1.45], [-1.74, 1.02]], 1.6, .05), GLASS),                            // glasshouse
+    part(new T.BoxGeometry(1.46, .06, 1.5), body, -.56, 1.47, 0),                                                                   // roof
+    part(new T.BoxGeometry(.12, .5, 1.64), body, -.42, 1.18, 0),                                                                    // B-pillar
+    part(new T.BoxGeometry(3.7, .07, 1.8), body, -.4, .93, 0),                                                                      // waist line
+    part(new T.BoxGeometry(4.42, .18, 1.82), TRIM, 0, .32, 0),                                                                      // bumpers and sills
+    part(new T.BoxGeometry(.04, .14, .9), TRIM, 2.19, .48, 0),                                                                      // grille
+    ...tyre(.34, .24, 1.36, .34, .82), ...tyre(.34, .24, 1.36, .34, -.82), ...tyre(.34, .24, -1.36, .34, .82), ...tyre(.34, .24, -1.36, .34, -.82),
+  ]);
+}
+// step-through scooter, 1.9 m long
+function scooterGeometry(body) {
+  return merge([
+    part(profile([[-.98, .44], [-.2, .36], [.36, .36], [.5, .46], [.64, 1.02], [.53, 1.07], [.36, .58], [-.08, .5], [-.34, .64], [-.84, .8], [-1.02, .64]], .42, .05), body),
+    part(new T.BoxGeometry(.62, .1, .34), TRIM, -.52, .86, 0),                       // seat
+    part(new T.CylinderGeometry(.03, .03, .42, 8), 0x8a9099, .66, .64, 0, 0, -.32),  // front fork
+    part(new T.BoxGeometry(.09, .14, .16), TRIM, .6, 1.1, 0),                         // stem
+    part(new T.CylinderGeometry(.024, .024, .66, 8), TRIM, .6, 1.17, 0, PI / 2),     // handlebar
+    ...tyre(.27, .13, .7, .27, 0), ...tyre(.27, .15, -.72, .27, 0),
+  ]);
+}
+// the rider sitting on the scooter above, hands on the bars; helmet in the brand colour
+function riderGeometry(suit, helmet) {
+  const pants = 0x262a33, shoe = 0x121418, P = [];
+  for (const z of [-.13, .13]) {
+    P.push(part(new T.CylinderGeometry(.08, .09, .5, 8), pants, -.27, .97, z, 0, -PI / 2));      // thigh, seat to knee
+    P.push(part(new T.CylinderGeometry(.065, .075, .48, 8), pants, .03, .72, z, 0, .21));       // shin, knee to footboard
+    P.push(part(new T.BoxGeometry(.22, .08, .11), shoe, .1, .46, z));
+  }
+  P.push(part(new T.CylinderGeometry(.15, .19, .54, 10), suit, -.44, 1.24, 0, 0, -.24));          // torso, leaning forward
+  for (const z of [-.21, .21]) P.push(part(new T.CylinderGeometry(.05, .058, .98, 8), suit, .09, 1.3, z, 0, -1.91));   // arms to the bars
+  P.push(part(new T.SphereGeometry(.18, 16, 12), helmet, -.34, 1.7, 0));
+  P.push(part(new T.SphereGeometry(.14, 14, 10, -PI / 2, PI, 0, PI / 1.6), GLASS, -.27, 1.69, 0));   // visor
+  P.push(part(new T.CylinderGeometry(.07, .08, .08, 8), suit, -.38, 1.52, 0));                    // neck
+  return merge(P);
+}
+// insulated delivery box on the rear rack, brand coloured with a light panel for the logo
+function boxGeometry(brand) {
+  return merge([part(new T.BoxGeometry(.5, .44, .48), brand, -.95, 1.04, 0), part(new T.BoxGeometry(.52, .06, .5), 0xb6adff, -.95, 1.27, 0),
+    part(new T.BoxGeometry(.26, .2, .5), 0xece8df, -.95, 1.03, 0), part(new T.BoxGeometry(.46, .05, .4), TRIM, -.95, .8, 0)]);   // box, lid, logo panel, rack
+}
 
 function start(o) {
   if (!document.getElementById('dv-css')) { const st = document.createElement('style'); st.id = 'dv-css'; st.textContent = CSS; document.head.appendChild(st); }
@@ -178,25 +245,24 @@ function start(o) {
       const c = { x, y, ang: Math.atan2(side > 0 ? -dy : dy, side > 0 ? -dx : dx), r: 1.2 }; npc.push(c); put(nHash, x, y, c); }
   }
   if (npc.length) {
-    const body = new T.InstancedMesh(new T.BoxGeometry(4.2, 1.4, 1.8).translate(0, .75, 0), new T.MeshLambertMaterial({ color: 0xffffff }), npc.length);
-    const tail = new T.InstancedMesh(new T.BoxGeometry(.1, .25, 1.4).translate(-2.12, .9, 0), new T.MeshBasicMaterial({ color: 0xff2a2a }), npc.length);
-    const m = new T.Matrix4(), qt = new T.Quaternion(), col = new T.Color(), cs = [0xd8d8d8, 0x2b2f38, 0x8a9099, 0xb8322b, 0x3b5d8f, 0xe9e4d6];
+    const body = new T.InstancedMesh(carGeometry(0xffffff), new T.MeshPhongMaterial({ vertexColors: true, shininess: 60, specular: 0x333333 }), npc.length);
+    const tail = new T.InstancedMesh(merge([part(new T.BoxGeometry(.05, .16, .38), 0xffffff, -2.27, .74, .58), part(new T.BoxGeometry(.05, .16, .38), 0xffffff, -2.27, .74, -.58)]), new T.MeshBasicMaterial({ color: 0xff2a2a }), npc.length);
+    const m = new T.Matrix4(), qt = new T.Quaternion(), col = new T.Color(), cs = [0xe4e4e4, 0x3a3f4a, 0x9aa1ab, 0xc0392f, 0x3b6aa8, 0xefe9dc, 0x2f6b4f, 0xd9b44a];
     npc.forEach((c, i) => { qt.setFromAxisAngle(new T.Vector3(0, 1, 0), c.ang); m.compose(P3(c.x, c.y), qt, new T.Vector3(1, 1, 1)); body.setMatrixAt(i, m); tail.setMatrixAt(i, m); body.setColorAt(i, col.set(cs[i % cs.length])); });
     scene.add(body, tail);
   }
 
   // ---------- your vehicle ----------
   const me = new T.Group(); me.rotation.order = 'YXZ'; scene.add(me);
-  const box = (w, h, d, c, x, y, z, basic) => { const b = new T.Mesh(new T.BoxGeometry(w, h, d), basic ? new T.MeshBasicMaterial({ color: c }) : new T.MeshLambertMaterial({ color: c })); b.position.set(x, y, z); me.add(b); return b; };
+  const paint = new T.MeshPhongMaterial({ vertexColors: true, shininess: 70, specular: 0x444444 });
+  const lamp = (c, w, h, d, x, y, z) => { const b = new T.Mesh(new T.BoxGeometry(w, h, d), new T.MeshBasicMaterial({ color: c })); b.position.set(x, y, z); me.add(b); };
   if (o.veh === 'car') {
-    box(4.4, .75, 1.8, 0x7c6cff, 0, .7, 0); box(2.3, .6, 1.6, 0x1b2230, -.2, 1.35, 0);
-    box(.06, .2, .45, 0xfff6d8, 2.21, .8, .55, true); box(.06, .2, .45, 0xfff6d8, 2.21, .8, -.55, true);
-    box(.06, .2, .45, 0xff2a2a, -2.21, .85, .55, true); box(.06, .2, .45, 0xff2a2a, -2.21, .85, -.55, true);
+    me.add(new T.Mesh(carGeometry(0x7c6cff), paint));
+    for (const z of [-.58, .58]) { lamp(0xfff6d8, .05, .14, .42, 2.28, .66, z); lamp(0xff2a2a, .05, .16, .38, -2.27, .74, z); }
+    lamp(0xd9d4c6, .03, .14, .44, -2.27, .48, 0);   // number plate
   } else {
-    box(1.8, .45, .45, 0x7c6cff, 0, .7, 0); box(.6, .6, .35, 0x7c6cff, .65, .95, 0);
-    for (const x of [-.65, .65]) { const w = new T.Mesh(new T.CylinderGeometry(.33, .33, .14, 12), new T.MeshLambertMaterial({ color: 0x111111 })); w.rotation.x = PI / 2; w.position.set(x, .33, 0); me.add(w); }
-    box(.45, .8, .5, 0x2a3b55, -.15, 1.45, 0); box(.32, .32, .32, 0xf2c53d, -.1, 2.05, 0); box(.55, .45, .55, 0x7c6cff, -.75, 1.25, 0);   // rider, helmet, delivery box
-    box(.06, .16, .2, 0xfff6d8, .82, 1.05, 0, true);
+    me.add(new T.Mesh(scooterGeometry(0x7c6cff), paint), new T.Mesh(riderGeometry(0x2d3b57, 0x7c6cff), paint), new T.Mesh(boxGeometry(0x7c6cff), paint));
+    lamp(0xfff6d8, .05, .12, .16, .67, .98, 0); lamp(0xff2a2a, .05, .07, .16, -1.03, .66, 0);
   }
   const head = new T.SpotLight(0xfff1d0, 1.6, 70, .5, .6); head.position.set(1.8, 1.2, 0); head.target.position.set(20, 0, 0); me.add(head, head.target);
 
@@ -284,13 +350,13 @@ function start(o) {
   function physics(dt) {
     const gas = keys.G || pad.G, brake = keys.B || pad.B, steerIn = ((keys.L || pad.L) ? 1 : 0) - ((keys.R || pad.R) ? 1 : 0);
     const jam = (o.jams || []).some(j => Math.hypot(P.x - j.x, P.y - j.y) < j.r), offr = offRoad(P.x, P.y) > 1.2;
-    let maxV = V.maxV * wet * (jam ? V.jam : 1); if (offr) maxV = Math.min(maxV, 4);
+    let maxV = V.maxV * wet * (jam ? V.jam : 1); if (offr) maxV = Math.min(maxV, 6);
     if (waiting) { P.v = Math.max(0, P.v - 9 * dt); }
-    else if (gas) P.v = P.v < 0 ? P.v + 9 * dt : Math.min(maxV, P.v + V.acc * dt);
-    else if (brake) P.v = P.v > .3 ? P.v - 9 * dt : Math.max(-3, P.v - 2.5 * dt);
+    else if (gas) P.v = P.v < 0 ? P.v + 12 * dt : Math.min(maxV, P.v + V.acc * (1 - .5 * P.v / V.maxV) * dt);   // pulls hardest from a standstill
+    else if (brake) P.v = P.v > .3 ? P.v - 12 * dt : Math.max(-4, P.v - 3 * dt);
     else P.v -= Math.sign(P.v) * Math.min(Math.abs(P.v), 1.6 * dt);
     if (P.v > maxV) P.v = Math.max(maxV, P.v - 7 * dt);
-    const ms = V.steer / (1 + Math.abs(P.v) / 10);
+    const ms = V.steer / (1 + Math.abs(P.v) / 11);
     P.st += (steerIn * ms - P.st) * Math.min(1, dt * 6);
     const na = P.a + P.v / V.wb * Math.tan(P.st) * dt, nx = P.x + Math.cos(na) * P.v * dt, ny = P.y + Math.sin(na) * P.v * dt;
     if (hits(nx, ny)) { if (!contact && Math.abs(P.v) > 2.5) { bumps++; flash('💥 撞到嘢！啲餐會瀉'); } contact = true; P.v = -P.v * .15; }
@@ -305,6 +371,7 @@ function start(o) {
 
   // ---------- loop ----------
   let last = performance.now(), frameN = 0, raf = 0, waitPoll = 0;
+  const view = { scene, camera, renderer, me, cam: null };   // tests can park the camera at view.cam = { at: [dx, h, dz] } around you
   // one simulation step; false once the trip has ended
   function update(dt) {
     t += dt;
@@ -332,8 +399,10 @@ function start(o) {
     // camera + you
     me.position.set(P.x, 0, -P.y); me.rotation.y = P.a; me.rotation.x = o.veh === 'moto' ? -P.st * Math.min(1, Math.abs(P.v) / 8) * .6 : 0;   // bikes lean into the turn
     const c = Math.cos(P.a), s = Math.sin(P.a);
-    if (camMode === 'chase') { const back = o.veh === 'car' ? 8 : 6; camera.position.lerp(P3(P.x - c * back, P.y - s * back, o.veh === 'car' ? 3.4 : 2.8), Math.min(1, dt * 5)); camera.lookAt(P3(P.x + c * 6, P.y + s * 6, 1)); }
+    camera.fov += ((camMode === 'chase' ? 62 : 70) + Math.abs(P.v) * .45 - camera.fov) * Math.min(1, dt * 3); camera.updateProjectionMatrix();
+    if (camMode === 'chase') { const back = (o.veh === 'car' ? 8 : 6) + Math.abs(P.v) * .08; camera.position.lerp(P3(P.x - c * back, P.y - s * back, o.veh === 'car' ? 3.4 : 2.8), Math.min(1, dt * 5)); camera.lookAt(P3(P.x + c * 6, P.y + s * 6, 1)); }
     else { camera.position.copy(P3(P.x + c * (o.veh === 'car' ? .1 : .2), P.y + s * (o.veh === 'car' ? .1 : .2), o.veh === 'car' ? 1.25 : 2.0)); camera.lookAt(P3(P.x + c * 20, P.y + s * 20, 1)); }
+    if (view.cam) { const [dx, hh, dz] = view.cam.at; camera.position.set(P.x + dx, hh, -P.y + dz); camera.lookAt(P.x, .8, -P.y); }
     if (rain) { rain.position.set(camera.position.x, 0, camera.position.z); const p = rain.geometry.attributes.position; for (let i = 0; i < p.count; i += 2) { let y = p.getY(i) - dt * 28; if (y < 0) y += 30; p.setY(i, y); p.setY(i + 1, y - .9); } p.needsUpdate = true; }
     beacon.material.opacity = .22 + .12 * Math.sin(t * 3);
     renderer.render(scene, camera);
@@ -364,9 +433,9 @@ function start(o) {
     root.hidden = true; root.innerHTML = '';
     o.onEnd({ ok, msg, redRuns, bumps, offRoadSec: offT, leg, at: { x: P.x, y: P.y, a: P.a } });
   }
-  // keys/sim/state are for tests (index.html #dev): sim() runs the physics without waiting for animation frames
-  return { finish, keys, sim: (sec, step = .05) => { for (let s = 0; s < sec && !ended; s += step) if (!update(step)) break; },
+  // keys/sim/state/view are for tests (index.html #dev): sim() runs the physics without waiting for animation frames
+  return { finish, keys, view, sim: (sec, step = .05) => { for (let s = 0; s < sec && !ended; s += step) if (!update(step)) break; },
     get state() { return { ...P, leg, waiting, redRuns, bumps, ended, lastHit, offRoad: offRoad(P.x, P.y), lights: lights.length, buildings: blds.length, npc: npc.length, next: routePts.slice(0, 6) }; } };
 }
-window.StreetDrive = { start };
+window.StreetDrive = { start, VEH };
 })();
