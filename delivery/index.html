@@ -99,6 +99,14 @@ button.pri{background:var(--brand);border-color:var(--brand);color:#fff}
 .mrow .btns{display:flex;gap:6px}
 .mrow .btns button{padding:5px 8px;font-size:12px}
 .mfoot{flex:none;display:flex;justify-content:space-between;align-items:center;margin-top:12px;font-family:var(--mono);font-size:13px}
+.burst{background:var(--warn);border-color:var(--warn);color:#fff;padding:3px 10px;animation:blink 1s infinite}
+@keyframes blink{50%{opacity:.45}}
+#alertList{display:flex;flex-direction:column;gap:6px}
+.al{background:#2a1618;border:1px solid #5a2328;border-radius:8px;padding:8px;display:flex;flex-direction:column;gap:6px}
+.al.act{background:#1d1a2e;border-color:#3b3470}
+.al .row{display:flex;gap:4px;flex-wrap:wrap;align-items:center}
+.al button{padding:4px 7px;font-size:12px}
+.cr .gig{font-size:11px;color:var(--gold);margin-left:4px}
 #side .grip{display:none;width:100%;text-align:center;color:var(--dim);font-size:12px;cursor:pointer;padding-bottom:4px;background:none;border:0}
 @media (max-width:760px){
   #app{grid-template-columns:1fr}
@@ -122,10 +130,15 @@ button.pri{background:var(--brand);border-color:var(--brand);color:#fff}
     <span class="sp"></span>
     <span class="stat">💰<b id="tMoney">0</b></span>
     <span class="stat">⭐<b id="tRate">4.50</b></span>
+    <button id="tBurst" class="burst" hidden>⚠ 爆單</button>
   </header>
   <div id="map"></div>
   <aside id="side">
     <button class="grip" id="grip">▲ 今日數字／外送員</button>
+    <section id="alerts" hidden>
+      <h3>爆單警報 <button class="info" data-info="burst">i</button></h3>
+      <div id="alertList"></div>
+    </section>
     <section>
       <h3>今日數字</h3>
       <div class="kv">
@@ -314,12 +327,14 @@ function kindWeight(kind, h) {
 }
 const ratingMul = () => clamp((S.rating - 2) / 2.5, .25, 1.2);
 
-function newDayStats() { return { done: 0, onTime: 0, late: 0, cancel: 0, revenue: 0, cost: 0, rating0: S.rating }; }
+function newDayStats() { return { done: 0, onTime: 0, late: 0, cancel: 0, blocked: 0, surge: 0, revenue: 0, cost: 0, rating0: S.rating }; }
 
 // ---------- zones ----------
 const cellAt = (x, y) => { const c = Math.floor((x - grid.x0) / CELL), r = Math.floor((y - grid.y0) / CELL); return c >= 0 && r >= 0 && c < grid.cols && r < grid.rows ? r * grid.cols + c : -1; };
 const near = (a, b) => Math.abs(cells[a].col - cells[b].col) <= 1 && Math.abs(cells[a].row - cells[b].row) <= 1;
 const zoneOf = c => c.zone ?? c.auto;
+const surgeOf = i => { const k = cells[i]; return k && k.surge && k.surge.until > S.t ? k.surge.pct : 0; };
+const BURST = 4;   // unassigned orders in one zone that count as a burst
 function setHome(c) {
   const z = zoneOf(c); c.home = z == null ? c.base : cells[z].node;
   if (c.st === 'idle' && c.node !== c.home) { c.st = 'back'; setPath(c, c.home); }
@@ -345,6 +360,8 @@ function spawnOrder() {
   let tot = 0; for (const p of open) tot += kindWeight(p.kind, h);
   let r = Math.random() * tot, p = open[0];
   for (const q of open) { r -= kindWeight(q.kind, h); if (r <= 0) { p = q; break; } }
+  const zk = cells[p.cell];
+  if (zk && zk.stop > S.t) { S.today.blocked++; S.rating = clamp(S.rating - .004, 1, 5); return; }   // stopped zone: the customer is turned away
   // destination: a home 0.3–3 km away
   const px = G.x[p.node], py = G.y[p.node];
   let home = null;
@@ -354,6 +371,7 @@ function spawnOrder() {
   const prep = rand(5, 12), est = prep + km * 1300 / SPEED_MPM;
   S.orders.push({ id: S.nextId++, p, home, cell: p.cell, t0: S.t, ready: S.t + prep, due: S.t + Math.max(25, est + 15), km,
     food: Math.round(rand(120, 600) * k), fee: Math.round((30 + 10 * km) * k), pay: Math.round((45 + 10 * km) * k),
+    bonus: Math.round((45 + 10 * km) * k * surgeOf(p.cell) / 100),
     st: 'wait', c: null, mk: null });
   S.recent.push([p.ll[0], p.ll[1], S.t]);
 }
@@ -403,7 +421,8 @@ function move(c, gmin) {
 function finish(o, c) {
   const late = S.t > o.due, T = S.today;
   o.st = 'done'; T.done++;
-  const rev = o.food * S.comm / 100 + o.fee, comp = late ? o.fee + 30 * CITIES[cityId].k : 0, pay = c.pay === 'comm' ? o.pay : 0;
+  const rev = o.food * S.comm / 100 + o.fee, comp = late ? o.fee + 30 * CITIES[cityId].k : 0, pay = (c.pay === 'comm' ? o.pay : 0) + o.bonus;
+  T.surge += o.bonus; if (c.gig) c.left--;
   T.revenue += rev; T.cost += pay + comp; S.money += rev - pay - comp;
   if (late) { T.late++; S.rating = clamp(S.rating - .012, 1, 5); } else { T.onTime++; S.rating = clamp(S.rating + .0015, 1, 5); }
   c.order = null;
@@ -413,6 +432,20 @@ function cancel(o) {
   if (o.c) { o.c.order = null; if (o.c.st === 'toShop' || o.c.st === 'waitFood') { o.c.st = 'back'; setPath(o.c, o.c.home); } }
 }
 
+// surge pulls in gig couriers for that zone: +100% ≈ one every 6 min, at most 1 + pct/25 at a time
+function gigs(gmin) {
+  for (const k of cells) {
+    const pct = surgeOf(k.i); if (!pct) continue;
+    k.gigCarry = (k.gigCarry || 0) + gmin * pct / 600;
+    if (k.gigCarry >= 1) {
+      k.gigCarry = 0;
+      if (S.couriers.filter(c => c.gig && c.zone === k.i).length < 1 + pct / 25)
+        { const g = newCourier(k.node, { gig: true, rel: rand(.75, .9), left: 1 + Math.floor(rand(0, 3)) }); g.zone = k.i; S.couriers.push(g); }
+    }
+  }
+  for (const c of S.couriers.filter(c => c.gig && c.st === 'idle' && (c.left <= 0 || !surgeOf(c.zone)))) dismiss(c);
+}
+function dismiss(c) { S.couriers.splice(S.couriers.indexOf(c), 1); if (c.mk) liveLayer.removeLayer(c.mk); if (sel === c) sel = null; }
 function step(gmin) {
   S.t += gmin;
   // new orders: expected count this slice, drawn one by one
@@ -423,6 +456,7 @@ function step(gmin) {
   for (const o of S.orders) if ((o.st === 'wait' || o.st === 'taken') && !o.picked && S.t > o.due + 15) cancel(o);
   if ((S.rebT = (S.rebT || 0) - gmin) <= 0) { S.rebT = 2; rebalance(); }
   dispatch();
+  gigs(gmin);
   for (const c of S.couriers) {
     const busy = c.st !== 'idle' && c.st !== 'rest';
     c.stam = clamp(c.stam + (c.st === 'rest' ? 2 : busy ? -.35 / c.end : .2) * gmin, 0, 100);
@@ -457,10 +491,12 @@ function drawLive() {
     o.mk.setStyle({ color: col, opacity: o.st === 'wait' ? .95 : .35 });
   }
 }
-function drawCells() {
+function drawCells(waiting) {
   for (const k of cells) {
-    const have = S.couriers.filter(c => zoneOf(c) === k.i).length;
-    const txt = cellName(k.i) + (have || k.min ? ` <b class="${have < k.min ? 'short' : ''}">${have}${k.min ? '/' + k.min : ''}</b>` : '');
+    const have = S.couriers.filter(c => zoneOf(c) === k.i && !c.gig).length, pct = surgeOf(k.i), stop = k.stop > S.t;
+    const look = stop ? 'stop' : (waiting.get(k.i) || 0) >= BURST ? 'burst' : pct ? 'surge' : '';
+    if (k.look !== look) { k.look = look; k.rect.setStyle(look ? { fill: true, fillColor: { stop: '#6b7080', burst: '#ff5d5d', surge: '#f2c53d' }[look], fillOpacity: look === 'surge' ? .1 : .2 } : { fill: false }); }
+    const txt = cellName(k.i) + (have || k.min ? ` <b class="${have < k.min ? 'short' : ''}">${have}${k.min ? '/' + k.min : ''}</b>` : '') + (pct ? ' ⚡+' + pct + '%' : '') + (stop ? ' ⛔' : '');
     if (k.lbl.html !== txt) { k.lbl.html = txt; k.lbl.setIcon(L.divIcon({ className: 'cell-lbl', html: txt, iconSize: null, iconAnchor: [-4, -3] })); }
   }
 }
@@ -474,11 +510,21 @@ function drawUi(force) {
   $('sWait').textContent = wait; $('sActive').textContent = act; $('sCancel').textContent = T.cancel;
   $('sNet').textContent = money(T.revenue - T.cost);
   $('crewN').textContent = '（' + S.couriers.length + '）';
-  $('crewList').innerHTML = S.couriers.map(c => `<div class="cr${c === sel ? ' sel' : ''}" data-id="${c.id}"><i class="dot" style="background:${STATE[c.st][0]}"></i><span>${c.name}${zoneOf(c) != null ? `<span class="z">${c.zone != null ? '駐' : '補'} ${cellName(zoneOf(c))}</span>` : ''}</span><span class="st">${STATE[c.st][1]}</span><span class="bar"><i style="width:${c.stam}%;background:${c.stam < 25 ? 'var(--warn)' : 'var(--ok)'}"></i></span></div>`).join('');
+  const crew = S.couriers.map(c => `<div class="cr${c === sel ? ' sel' : ''}" data-id="${c.id}"><i class="dot" style="background:${STATE[c.st][0]}"></i><span>${c.name}${c.gig ? '<span class="gig">散工</span>' : ''}${zoneOf(c) != null ? `<span class="z">${c.zone != null ? '駐' : '補'} ${cellName(zoneOf(c))}</span>` : ''}</span><span class="st">${STATE[c.st][1]}</span><span class="bar"><i style="width:${Math.round(c.stam / 5) * 5}%;background:${c.stam < 25 ? 'var(--warn)' : 'var(--ok)'}"></i></span></div>`).join('');
+  if ($('crewList').dataset.h !== crew) { $('crewList').dataset.h = crew; $('crewList').innerHTML = crew; }
   $('selBar').hidden = !sel;
   if (sel) { $('selName').textContent = '已揀：' + sel.name; $('bUnzone').disabled = sel.zone == null; }
   if (heat) heat.setLatLngs(heatOn ? [...S.orders.filter(o => o.st === 'wait').map(o => [...o.p.ll, 1]), ...S.recent.map(r => [r[0], r[1], .35])] : []);
-  drawCells();
+  // burst alerts: zones over the line get the two choices, running measures can be cancelled
+  const waiting = new Map(); for (const o of S.orders) if (o.st === 'wait') waiting.set(o.cell, (waiting.get(o.cell) || 0) + 1);
+  const burst = cells.filter(k => (waiting.get(k.i) || 0) >= BURST && !(k.stop > S.t));
+  const left = t => Math.ceil((t - S.t) / 5) * 5 + ' 分';
+  const al = burst.map(k => `<div class="al"><b>${cellName(k.i)} 區：${waiting.get(k.i)} 張冇人接</b>
+      <div class="row">加錢 ${[20, 50, 100].map(p => `<button data-surge="${p}" data-z="${k.i}"${surgeOf(k.i) === p ? ' disabled' : ''}>+${p}%</button>`).join('')}<button data-stop="${k.i}">停單 30 分</button></div></div>`).join('') +
+    cells.filter(k => surgeOf(k.i) || k.stop > S.t).map(k => `<div class="al act"><div class="row"><b>${cellName(k.i)}</b>${surgeOf(k.i) ? ` 加錢 +${surgeOf(k.i)}%（剩 ${left(k.surge.until)}）<button data-unsurge="${k.i}">取消</button>` : ''}${k.stop > S.t ? ` 停單（剩 ${left(k.stop)}）<button data-unstop="${k.i}">恢復</button>` : ''}</div></div>`).join('');
+  if ($('alertList').dataset.h !== al) { $('alertList').dataset.h = al; $('alertList').innerHTML = al; }
+  $('alerts').hidden = !al; $('tBurst').hidden = !burst.length;
+  drawCells(waiting);
 }
 
 // ---------- dispatch controls: select, drag to a zone, set a zone minimum, reassign ----------
@@ -524,6 +570,16 @@ document.addEventListener('click', e => {
   const row = e.target.closest('.cr');
   if (row) select(S.couriers.find(c => c.id === +row.dataset.id));
 });
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-surge],[data-stop],[data-unsurge],[data-unstop]'); if (!b) return;
+  const d = b.dataset;
+  if (d.surge) { const k = cells[+d.z]; k.surge = { pct: +d.surge, until: S.t + 60 }; toast(cellName(k.i) + ' 區加錢 +' + d.surge + '%，散工會陸續上線'); }
+  else if (d.stop) { const k = cells[+d.stop]; k.stop = S.t + 30; toast(cellName(k.i) + ' 區停單 30 分鐘'); }
+  else if (d.unsurge) cells[+d.unsurge].surge = null;
+  else cells[+d.unstop].stop = 0;
+  drawUi(true);
+});
+$('tBurst').onclick = () => { $('side').classList.add('open'); $('alerts').scrollIntoView({ block: 'nearest' }); };
 $('bUnzone').onclick = () => { if (sel) { station(sel, null); drawUi(true); } };
 $('bUnsel').onclick = () => select(sel);
 $('bHeat').onclick = () => { heatOn = !heatOn; $('bHeat').textContent = '熱力圖：' + (heatOn ? '開' : '閂'); drawUi(true); };
@@ -566,6 +622,8 @@ function startDay() {
 function endDay() {
   S.speed = 0; markSpeed();
   for (const o of S.orders) if (o.st === 'wait' || o.st === 'taken') cancel(o);
+  for (const c of S.couriers.filter(c => c.gig)) dismiss(c);
+  for (const k of cells) { k.surge = null; k.stop = 0; }
   // restaurants react to the commission: above 25% some leave, at 20% or below some come back
   let left = 0, back = 0;
   for (const p of places) {
@@ -577,7 +635,9 @@ function endDay() {
     <tr><td>完成單數</td><td>${T.done}</td></tr>
     <tr><td>準時率</td><td>${T.done ? Math.round(T.onTime / T.done * 100) + '%' : '–'}</td></tr>
     <tr><td>取消</td><td>${T.cancel}</td></tr>
+    ${T.blocked ? `<tr><td>停單擋咗</td><td>${T.blocked} 張</td></tr>` : ''}
     <tr><td>收入</td><td>${money(T.revenue)}</td></tr>
+    ${T.surge ? `<tr><td>加錢獎金（已計入支出）</td><td>${money(T.surge)}</td></tr>` : ''}
     <tr><td>支出</td><td>${money(T.cost)}</td></tr>
     <tr><td>淨利</td><td class="${cls(net)}">${money(net)}</td></tr>
     <tr><td>評分變化</td><td class="${cls(dr)}">${(dr >= 0 ? '+' : '') + dr.toFixed(2)}（${S.rating.toFixed(2)}）</td></tr>
@@ -616,9 +676,9 @@ function setupWorld(d) {
   for (let r = 0; r < grid.rows; r++) for (let col = 0; col < grid.cols; col++) {
     const cx = x0 + (col + .5) * CELL, cy = y0 + (r + .5) * CELL, i = cells.length;
     const sw = G.toLL(x0 + col * CELL, y0 + r * CELL), ne = G.toLL(x0 + (col + 1) * CELL, y0 + (r + 1) * CELL);
-    baseLayer.addLayer(L.rectangle([sw, ne], { color: '#7c6cff', weight: 1, opacity: .18, fill: false, interactive: false }));
+    const rect = L.rectangle([sw, ne], { color: '#7c6cff', weight: 1, opacity: .18, fill: false, interactive: false }); baseLayer.addLayer(rect);
     const lbl = L.marker([ne[0], sw[1]], { interactive: false, keyboard: false }); lbl.html = ''; baseLayer.addLayer(lbl);
-    cells.push({ i, col, row: grid.rows - 1 - r, node: G.snap(cx, cy), min: 0, lbl });
+    cells.push({ i, col, row: grid.rows - 1 - r, node: G.snap(cx, cy), min: 0, lbl, rect, surge: null, stop: 0, look: '' });
   }
   places = d.P.map(([la, lo, kind, name]) => { const [px, py] = G.toXY(la, lo); return { ll: [la, lo], node: G.snap(px, py), cell: cellAt(px, py), kind, name, on: true }; });
   homes = d.H.map(([la, lo]) => ({ ll: [la, lo], node: G.snap(...G.toXY(la, lo)) }));
@@ -657,6 +717,7 @@ $('grip').onclick = () => $('side').classList.toggle('open');
 const INFO = {
   comm: '平台由每張單嘅食物價錢抽呢個百分比。抽得高每單賺多啲，但抽成高過 25%，每日收工都會有餐廳退出平台，單量跟住跌；調返 20% 或以下，退出咗嘅餐廳會慢慢返嚟。',
   zone: '地圖分成 400 米一格。將外送員拖去一格（手機：先撳外送員，再撳格），佢就駐守嗰格：優先接本格嘅單，本格冇單先接隔籬格，送完返嚟等。撳一格可以設定「最少幾多人」，冇駐守嘅外送員會自動被派去補位。揀咗外送員再撳紅圈（冇人接嘅單）就係手動改派。',
+  burst: '某一區冇人接嘅單去到 4 張就算爆單，嗰格會變紅。加錢：嗰區每張新單俾外送員額外獎金（+20% 至 +100%），維持 60 分鐘，會有散工陸續上線幫手，加得越多嚟得越快，但每單賺少咗。停單：嗰區 30 分鐘唔接新單，冇收入，評分會輕微跌，但唔會再積遲到。',
   market: '日薪：每日開工前俾一次人工，佢當日送幾多單都唔使再俾錢，爆單日最抵。純抽成：冇底薪，每送一單先俾一次錢，淡日最抵。請返嚟嘅人會一直留低，唔要就喺「現有人手」辭退。',
 };
 document.addEventListener('click', e => {
@@ -668,7 +729,7 @@ document.addEventListener('click', e => {
   pop.style.top = (r.top > pop.offsetHeight + 20 ? r.top - pop.offsetHeight - 8 : r.bottom + 8) + 'px';
 });
 
-if (location.hash === '#dev') window.wsfy = { S, step, endDay, startDay, drawLive, rebalance, station, get cells() { return cells; } };   // test hook: fast-forward from the console
+if (location.hash === '#dev') window.wsfy = { S, step, endDay, startDay, drawLive, drawUi, rebalance, station, get cells() { return cells; } };   // test hook: fast-forward from the console
 start(false);
 requestAnimationFrame(frame);
 })();
