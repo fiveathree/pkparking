@@ -1,0 +1,952 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>外送風雲</title>
+<meta name="description" content="外送平台調度遊戲：喺真實城市地圖上分派外送員，爆單就加錢、停單，或者親自落場送兼泊車。">
+<meta name="theme-color" content="#0d0f13">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta property="og:type" content="website">
+<meta property="og:title" content="外送風雲">
+<meta property="og:description" content="做外送平台嘅中央調度：真實地圖、分區派人、爆單加錢、親自落場送兼泊車。">
+<meta property="og:url" content="https://fiveathree.github.io/pkparking/delivery/">
+<meta property="og:image" content="https://fiveathree.github.io/pkparking/delivery/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://fiveathree.github.io/pkparking/delivery/og-image.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;700&family=Noto+Sans+TC:wght@400;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+:root{--bg:#0d0f13;--panel:#151820;--line:#262b36;--ink:#ece8df;--dim:#8a8f9c;--brand:#7c6cff;--brand2:#b6adff;--warn:#ff5d5d;--ok:#4fd1a5;--gold:#f2c53d;
+  --font:'Noto Sans TC',system-ui,sans-serif;--mono:'IBM Plex Mono',ui-monospace,monospace}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--ink);font-family:var(--font);overflow:hidden}
+#app{display:grid;grid-template-rows:auto 1fr auto;grid-template-columns:1fr 290px;height:100dvh}
+#top{grid-column:1/-1;display:flex;align-items:center;gap:14px;padding:8px 14px;background:var(--panel);border-bottom:1px solid var(--line);font-size:14px;white-space:nowrap;overflow:hidden}
+#top .logo{font-weight:900;font-size:17px;color:var(--brand2);text-decoration:none}
+#top .stat{font-family:var(--mono);display:flex;gap:5px;align-items:center}
+#top .stat b{font-weight:700}
+#top .sp{flex:1}
+.speed{display:flex;gap:2px}
+.speed button{padding:3px 8px;font-family:var(--mono);font-size:12px;border-radius:6px}
+.speed button.on{background:var(--brand);border-color:var(--brand);color:#fff}
+#map{grid-column:1;background:#11141a}
+#side{grid-column:2;background:var(--panel);border-left:1px solid var(--line);padding:12px;font-size:13px;display:flex;flex-direction:column;gap:12px;min-height:0}
+#side h3{font-size:12px;color:var(--dim);font-weight:700;letter-spacing:.06em;margin-bottom:6px}
+.kv{display:grid;grid-template-columns:1fr auto;gap:4px 10px;font-family:var(--mono)}
+.kv span:nth-child(odd){font-family:var(--font);color:var(--dim)}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle;flex:none}
+#crew{flex:1;min-height:0;display:flex;flex-direction:column}
+#crewList{overflow:auto;min-height:0;display:flex;flex-direction:column;gap:3px}
+.cr{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:6px;padding:4px 6px;border-radius:6px;background:#1a1e27}
+.cr .st{color:var(--dim);font-size:12px}
+.cr .bar{grid-column:2/4;height:3px;background:#2a2f3b;border-radius:2px;overflow:hidden}
+.cr .bar i{display:block;height:100%;background:var(--ok)}
+.legend{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12px;color:var(--dim)}
+#bottom{grid-column:1/-1;display:flex;gap:8px;padding:8px 12px;background:var(--panel);border-top:1px solid var(--line);overflow-x:auto;align-items:center}
+#bottom label{font-size:13px;color:var(--dim);display:flex;gap:6px;align-items:center;white-space:nowrap}
+select{font:inherit;font-size:13px;color:var(--ink);background:#1f2430;border:1px solid var(--line);border-radius:8px;padding:6px 8px}
+button{font:inherit;font-size:13px;font-weight:700;color:var(--ink);background:#1f2430;border:1px solid var(--line);border-radius:8px;padding:8px 12px;cursor:pointer;white-space:nowrap}
+button:hover:not(:disabled){border-color:var(--brand)}
+button:disabled{opacity:.4;cursor:default}
+button.pri{background:var(--brand);border-color:var(--brand);color:#fff}
+.info{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;padding:0;border-radius:50%;font-size:11px;font-weight:700;color:var(--dim);background:transparent;border:1px solid var(--line);font-family:var(--mono)}
+#pop{position:fixed;z-index:1100;width:300px;max-width:calc(100vw - 24px);background:#1b1f29;border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:13px;line-height:1.6;color:var(--ink);box-shadow:0 10px 30px rgba(0,0,0,.5)}
+#pop[hidden]{display:none}
+/* dark map without another tile source: dim + invert the standard OSM tiles */
+.leaflet-tile-pane{filter:invert(1) hue-rotate(200deg) brightness(.85) contrast(.9) saturate(.6)}
+.leaflet-container{font-family:var(--font);background:#11141a}
+.leaflet-control-attribution{background:rgba(13,15,19,.75)!important;color:var(--dim)!important}
+.leaflet-control-attribution a{color:var(--brand2)!important}
+#overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(13,15,19,.86);z-index:1000;padding:16px}
+#overlay[hidden]{display:none}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px;width:min(380px,100%);text-align:center}
+.card h2{font-size:20px;margin-bottom:8px}
+.card p{color:var(--dim);font-size:14px;margin-bottom:14px;line-height:1.6}
+.card table{width:100%;border-collapse:collapse;font-size:14px;margin:6px 0 16px}
+.card td{padding:5px 2px;border-bottom:1px solid var(--line);text-align:left}
+.card td:last-child{text-align:right;font-family:var(--mono)}
+.pos{color:var(--ok)}.neg{color:var(--warn)}
+.spin{width:30px;height:30px;border:3px solid var(--line);border-top-color:var(--brand);border-radius:50%;margin:0 auto 12px;animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.cr{cursor:pointer;border:1px solid transparent}
+.cr.sel{border-color:var(--brand)}
+.cr .z{font-family:var(--mono);font-size:11px;color:var(--brand2);margin-left:4px}
+.cell-lbl{font-family:var(--mono);font-size:10px;color:rgba(236,232,223,.45);white-space:nowrap;pointer-events:none}
+.cell-lbl b{color:var(--brand2)}
+.cell-lbl b.short{color:var(--warn)}
+#selBar{display:flex;gap:8px;align-items:center;font-size:13px}
+#selBar[hidden]{display:none}
+#toast{position:fixed;left:50%;top:64px;transform:translateX(-50%);z-index:1200;background:#1b1f29;border:1px solid var(--line);border-radius:8px;padding:8px 14px;font-size:13px;pointer-events:none;opacity:0;transition:opacity .2s}
+#toast.on{opacity:1}
+.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#1b1f29;color:var(--ink);border:1px solid var(--line)}
+.leaflet-popup-content{margin:10px 12px;font-size:13px}
+.minbox{display:flex;align-items:center;gap:8px;margin-top:6px}
+.minbox button{padding:2px 10px}
+/* staff market: fixed size, tabs never move */
+.card.market{width:min(460px,100%);height:min(540px,92dvh);display:flex;flex-direction:column;text-align:left;padding:18px}
+.tabs{display:flex;gap:6px;margin:4px 0 10px;flex:none}
+.tabs button{flex:1}
+.tabs button.on{background:var(--brand);border-color:var(--brand);color:#fff}
+.mlist{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:6px}
+.mrow{background:#1a1e27;border-radius:8px;padding:8px 10px;display:grid;grid-template-columns:1fr auto;gap:6px;align-items:center;font-size:13px}
+.mrow .attrs{grid-column:1/-1;display:grid;grid-template-columns:auto 1fr auto 1fr auto 1fr;gap:4px 6px;align-items:center;font-size:11px;color:var(--dim)}
+.mrow .m{height:4px;background:#2a2f3b;border-radius:2px;overflow:hidden}.mrow .m i{display:block;height:100%;background:var(--brand2)}
+.mrow .btns{display:flex;gap:6px}
+.mrow .btns button{padding:5px 8px;font-size:12px}
+.mfoot{flex:none;display:flex;justify-content:space-between;align-items:center;margin-top:12px;font-family:var(--mono);font-size:13px}
+.burst{background:var(--warn);border-color:var(--warn);color:#fff;padding:3px 10px;animation:blink 1s infinite}
+@keyframes blink{50%{opacity:.45}}
+#alertList{display:flex;flex-direction:column;gap:6px}
+.al{background:#2a1618;border:1px solid #5a2328;border-radius:8px;padding:8px;display:flex;flex-direction:column;gap:6px}
+.al.act{background:#1d1a2e;border-color:#3b3470}
+.al .row{display:flex;gap:4px;flex-wrap:wrap;align-items:center}
+.al button{padding:4px 7px;font-size:12px}
+.cr .gig{font-size:11px;color:var(--gold);margin-left:4px}
+#selfBar{position:fixed;left:50%;bottom:64px;transform:translateX(-50%);z-index:900;width:min(520px,calc(100vw - 24px));background:rgba(21,24,32,.96);border:1px solid var(--brand);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;font-size:13px}
+#selfBar[hidden]{display:none}
+#selfBar .r{display:flex;align-items:center;gap:10px;justify-content:space-between}
+#selfBar .eta{font-family:var(--mono)}
+#selfBar .turns{display:flex;gap:6px}
+#selfBar .turns button{width:52px;font-size:18px;padding:6px 0}
+#selfBar .turns button.on{background:var(--brand);border-color:var(--brand);color:#fff}
+#selfBar .ev{color:var(--gold);min-height:18px}
+#park{position:fixed;inset:0;width:100%;height:100%;border:0;z-index:1500;background:#000}
+#park[hidden]{display:none}
+.speed.lock{opacity:.4;pointer-events:none}
+.cities{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:8px}
+.city{background:#1a1e27;border:1px solid var(--line);border-radius:10px;padding:12px;display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:center}
+.city h3{font-size:17px}
+.city p{grid-column:1;color:var(--dim);font-size:12px;margin:0;line-height:1.5}
+.city .btns{grid-column:2;grid-row:1/3;display:flex;flex-direction:column;gap:6px}
+.city .btns button{padding:6px 10px;font-size:12px}
+#rain{position:absolute;inset:0;z-index:450;pointer-events:none;opacity:0;transition:opacity 1s;
+  background:repeating-linear-gradient(105deg,rgba(150,180,255,.0) 0 14px,rgba(150,180,255,.16) 14px 15px);background-size:60px 60px;animation:rain .5s linear infinite}
+#rain.on{opacity:1}#rain.storm{opacity:1;background-color:rgba(40,60,90,.25);animation-duration:.25s}
+@keyframes rain{to{background-position:-16px 60px}}
+#tCityBtn{all:unset;cursor:pointer;display:flex;gap:5px;align-items:center;font-family:var(--mono)}
+#side .grip{display:none;width:100%;text-align:center;color:var(--dim);font-size:12px;cursor:pointer;padding-bottom:4px;background:none;border:0}
+@media (max-width:760px){
+  #app{grid-template-columns:1fr}
+  #side{position:fixed;left:0;right:0;bottom:52px;height:46dvh;border-left:0;border-top:1px solid var(--line);border-radius:14px 14px 0 0;z-index:500;transform:translateY(calc(100% - 34px));transition:transform .25s}
+  #side.open{transform:none}
+  #side .grip{display:block}
+  #top{gap:4px 10px;font-size:12px;padding:6px 10px;flex-wrap:wrap}
+  #top .sp{display:none}
+  #top .logo{font-size:15px}
+  .hideS{display:none!important}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="top">
+    <a class="logo" href="../">外送風雲</a>
+    <span class="stat hideS"><button id="tCityBtn" title="換城市">📍<b id="tCity">高雄</b></button></span>
+    <span class="stat" id="tWx" title="天氣">☀️</span>
+    <span class="stat"><b id="tDay">第 1 日</b> <b id="tClock">06:00</b></span>
+    <span class="speed" id="speed"><button data-s="0">❚❚</button><button data-s="1" class="on">×1</button><button data-s="2">×2</button><button data-s="4">×4</button></span>
+    <span class="sp"></span>
+    <span class="stat">💰<b id="tMoney">0</b></span>
+    <span class="stat">⭐<b id="tRate">4.50</b></span>
+    <button id="tBurst" class="burst" hidden>⚠ 爆單</button>
+  </header>
+  <div id="map"><div id="rain"></div></div>
+  <aside id="side">
+    <button class="grip" id="grip">▲ 今日數字／外送員</button>
+    <section id="alerts" hidden>
+      <h3>爆單警報 <button class="info" data-info="burst">i</button></h3>
+      <div id="alertList"></div>
+    </section>
+    <section>
+      <h3>今日數字</h3>
+      <div class="kv">
+        <span>已送達</span><b id="sDone">0</b>
+        <span>準時率</span><b id="sOnTime">–</b>
+        <span>等緊人接</span><b id="sWait">0</b>
+        <span>送緊</span><b id="sActive">0</b>
+        <span>取消</span><b id="sCancel">0</b>
+        <span>今日淨利</span><b id="sNet">0</b>
+      </div>
+    </section>
+    <section id="crew">
+      <h3>外送員 <span id="crewN"></span></h3>
+      <div class="legend" id="legend"></div>
+      <div id="crewList" style="margin-top:6px"></div>
+    </section>
+  </aside>
+  <nav id="bottom">
+    <label>平台抽成 <select id="comm"><option>15</option><option>20</option><option selected>25</option><option>30</option><option>35</option></select>%</label>
+    <button class="info" data-info="comm">i</button>
+    <button id="bSelf" class="pri">親自出馬</button>
+    <button class="info" data-info="self">i</button>
+    <button id="bHeat">熱力圖：開</button>
+    <button class="info" data-info="zone">i</button>
+    <span id="selBar" hidden><b id="selName"></b><button id="bUnzone">解除駐守</button><button id="bUnsel">取消揀</button></span>
+    <span style="flex:1"></span>
+    <button id="bReload" title="重新由 OpenStreetMap 抓地圖資料">重新抓地圖</button>
+  </nav>
+</div>
+<div id="overlay"><div class="card" id="ovCard"><div class="spin"></div><h2>載入地圖中</h2><p>第一次開要由 OpenStreetMap 抓資料，大約十幾秒。</p></div></div>
+<div id="pop" hidden></div>
+<div id="toast"></div>
+<div id="selfBar" hidden>
+  <div class="r"><b id="sfTitle">親自出馬</b><span class="eta" id="sfEta"></span></div>
+  <div class="r"><span class="ev" id="sfEv"></span><span class="turns"><button data-turn="L" title="下個路口左轉（←）">◀</button><button data-turn="S" title="下個路口直行（↑）">▲</button><button data-turn="R" title="下個路口右轉（→）">▶</button></span></div>
+</div>
+<iframe id="park" hidden title="泊車"></iframe>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ngraph.graph@20.0.1/dist/ngraph.graph.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ngraph.path@1.5.0/dist/ngraph.path.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const rand = (a, b) => a + Math.random() * (b - a), pick = a => a[Math.floor(Math.random() * a.length)];
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+// ---------- cities ----------
+// bbox about 2 km x 2 km round the centre; cur = money symbol, k = price scale vs Taiwan
+const CITIES = {
+  khh: { name: '高雄', center: [22.6245, 120.3010], half: [0.009, 0.00975], cur: 'NT$', k: 1, veh: 'moto', area: '新堀江／中央公園一帶', vehName: '機車' },
+  tpe: { name: '台北', center: [25.0470, 121.5140], half: [0.009, 0.00975], cur: 'NT$', k: 1, veh: 'moto', area: '西門町／中山一帶', vehName: '機車' },
+  hk: { name: '香港', center: [22.3160, 114.1705], half: [0.009, 0.00975], cur: 'HK$', k: .33, veh: 'both', area: '旺角／油麻地一帶', vehName: '汽車＋電單車' },
+};
+let cityId = 'khh';
+
+// ---------- map data: Overpass, cached 7 days ----------
+const CACHE_DAYS = 7, MAP_VER = 1;
+const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
+const ROADS = 'trunk|primary|secondary|tertiary|unclassified|residential|living_street|service|trunk_link|primary_link|secondary_link|tertiary_link';
+
+function bboxOf(c) { const [la, lo] = c.center, [dla, dlo] = c.half; return [la - dla, lo - dlo, la + dla, lo + dlo]; }
+function query(c) {
+  const b = bboxOf(c).join(',');
+  return `[out:json][timeout:90];way["highway"~"^(${ROADS})$"](${b});out geom qt;` +
+    `(nwr["amenity"~"^(restaurant|fast_food|cafe)$"](${b});nwr["shop"~"^(supermarket|convenience)$"](${b});way["building"~"^(residential|apartments)$"](${b}););out center qt;`;
+}
+// compact form: N = flat [lat,lon,...] road nodes, W = road ways as node-index lists, P = places [lat,lon,kind,name], H = homes [lat,lon]
+function compact(json) {
+  const idx = new Map(), N = [], W = [], P = [], H = [];
+  const r5 = v => Math.round(v * 1e5) / 1e5;
+  for (const e of json.elements) {
+    const t = e.tags || {};
+    if (e.type === 'way' && t.highway && e.geometry) {
+      const w = [];
+      e.nodes.forEach((id, i) => {
+        if (!idx.has(id)) { idx.set(id, N.length / 2); N.push(r5(e.geometry[i].lat), r5(e.geometry[i].lon)); }
+        w.push(idx.get(id));
+      });
+      if (w.length > 1) W.push(w);
+      continue;
+    }
+    const p = e.type === 'node' ? e : e.center; if (!p) continue;
+    const kind = /^(restaurant|fast_food|cafe)$/.test(t.amenity) ? t.amenity : /^(supermarket|convenience)$/.test(t.shop) ? 'shop' : null;
+    if (!kind && !/^(residential|apartments)$/.test(t.building)) continue;
+    if (kind) P.push([r5(p.lat), r5(p.lon), kind, t['name:zh'] || t.name || '']);
+    else if (t.building) H.push([r5(p.lat), r5(p.lon)]);
+  }
+  return { v: MAP_VER, t: Date.now(), N, W, P, H };
+}
+async function fetchOverpass(c) {
+  let err;
+  for (const url of OVERPASS) {
+    try {
+      const r = await fetch(url, { method: 'POST', body: new URLSearchParams({ data: query(c) }) });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return compact(await r.json());
+    } catch (e) { err = e; }
+  }
+  throw err;
+}
+const cacheKey = id => 'wsfy-map-' + id;
+function readCache(id) { try { const d = JSON.parse(localStorage.getItem(cacheKey(id))); return d && d.v === MAP_VER ? d : null; } catch { return null; } }
+function writeCache(id, d) { try { localStorage.setItem(cacheKey(id), JSON.stringify(d)); } catch {} }
+async function loadCity(id, force) {
+  const cached = readCache(id);
+  if (cached && !force && Date.now() - cached.t < CACHE_DAYS * 864e5) return cached;
+  try { const d = await fetchOverpass(CITIES[id]); writeCache(id, d); return d; }
+  catch (e) { if (cached) return cached; throw e; }   // stale cache beats a blank screen
+}
+
+// ---------- road graph (metres, local flat projection) ----------
+let G = null;   // { x, y, n, graph, finder, comp: node ids in the biggest connected piece }
+function buildGraph(d) {
+  const c = CITIES[cityId], lat0 = c.center[0], lon0 = c.center[1], kx = Math.cos(lat0 * Math.PI / 180) * 111320, ky = 110540;
+  const n = d.N.length / 2, x = new Float64Array(n), y = new Float64Array(n), adj = Array.from({ length: n }, () => []);
+  for (let i = 0; i < n; i++) { x[i] = (d.N[2 * i + 1] - lon0) * kx; y[i] = (d.N[2 * i] - lat0) * ky; }
+  const graph = createGraph();
+  for (const w of d.W) for (let i = 1; i < w.length; i++) {
+    const a = w[i - 1], b = w[i]; if (a === b) continue;
+    graph.addLink(a, b); adj[a].push(b); adj[b].push(a);
+  }
+  // keep only the biggest connected piece so every route exists
+  const seen = new Int32Array(n).fill(-1); let best = [], k = 0;
+  for (let s = 0; s < n; s++) {
+    if (seen[s] >= 0 || !adj[s].length) continue;
+    const q = [s]; seen[s] = k;
+    for (let i = 0; i < q.length; i++) for (const m of adj[q[i]]) if (seen[m] < 0) { seen[m] = k; q.push(m); }
+    if (q.length > best.length) best = q; k++;
+  }
+  const dist = (a, b) => Math.hypot(x[a.id] - x[b.id], y[a.id] - y[b.id]);
+  const finder = ngraphPath.aStar(graph, { distance: dist, heuristic: dist });
+  const toXY = (la, lo) => [(lo - lon0) * kx, (la - lat0) * ky];
+  const toLL = (px, py) => [lat0 + py / ky, lon0 + px / kx];
+  const snap = (px, py) => { let bi = best[0], bd = Infinity; for (const i of best) { const dd = (x[i] - px) ** 2 + (y[i] - py) ** 2; if (dd < bd) { bd = dd; bi = i; } } return bi; };
+  G = { x, y, n, adj, graph, finder, comp: best, toXY, toLL, snap };
+}
+const routeNodes = (a, b) => a === b ? [a] : G.finder.find(a, b).reverse().map(nd => nd.id);
+// route between road nodes as a list of [x,y] points (ngraph returns target first)
+function route(a, b) {
+  if (a === b) return [[G.x[a], G.y[a]]];
+  return G.finder.find(a, b).reverse().map(nd => [G.x[nd.id], G.y[nd.id]]);
+}
+const lenOf = pts => { let s = 0; for (let i = 1; i < pts.length; i++) s += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); return s; };
+
+// ---------- map ----------
+const map = L.map('map', { zoomControl: false, preferCanvas: true });
+L.control.zoom({ position: 'topleft' }).addTo(map);
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, minZoom: 13,
+  attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors' }).addTo(map);
+const baseLayer = L.layerGroup().addTo(map), liveLayer = L.layerGroup().addTo(map);
+const KIND = { restaurant: ['#ff9f43', '餐廳'], fast_food: ['#ffd166', '快餐'], cafe: ['#c08bff', '咖啡店'], shop: ['#4fd1a5', '超市／便利店'] };
+const STATE = {
+  idle: ['#4fd1a5', '等單'], toShop: ['#7c6cff', '去餐廳'], waitFood: ['#f2c53d', '等餐'], deliver: ['#ff9f43', '送緊'],
+  back: ['#5aa9ff', '返回'], rest: ['#6b7080', '休息'],
+};
+
+// ---------- game state ----------
+const DAY_START = 6 * 60, DAY_END = 26 * 60;       // 06:00 to 02:00 next day, in game minutes
+const GMIN_PER_SEC = (DAY_END - DAY_START) / (8 * 60);   // one day ≈ 8 real minutes at ×1
+const SPEED_MPM = 250;                              // courier average in town, metres per game minute (~15 km/h with lights)
+const CELL = 400;                                   // zone size in metres
+const S = { day: 1, t: DAY_START, speed: 1, money: 20000, rating: 4.5, comm: 25, orders: [], couriers: [], today: null, nextId: 1, market: [], recent: [] };
+let places = [], homes = [];   // { ll:[lat,lon], node, kind, name, on }
+let cells = [], grid = null;   // grid: { x0, y0, cols, rows }
+let sel = null;                // selected courier
+
+const SUR = '陳林黃張李王吳劉蔡楊許鄭謝洪郭邱曾廖賴周';
+const GIV = ['家豪', '志明', '俊傑', '建宏', '冠宇', '怡君', '雅婷', '佳穎', '宗翰', '承恩', '柏翰', '詩涵', '子軒', '品妤', '宇翔', '欣怡'];
+// pay: 'comm' = paid per order, no base; 'wage' = fixed daily wage covers every order
+function newCourier(node, o = {}) {
+  return { id: S.nextId++, name: pick(SUR) + pick(GIV), spd: rand(.85, 1.15), rel: rand(.9, 1), end: rand(.8, 1.2), pay: 'comm', wage: 0, ...o, stam: 100,
+    st: 'idle', node, home: node, base: node, zone: null, auto: null, x: G.x[node], y: G.y[node], path: null, d: 0, order: null, mk: null };
+}
+const wageOf = c => Math.round((1200 + 900 * (c.spd - .85) / .3 + 600 * (c.rel - .85) / .15 + 300 * (c.end - .8) / .4) * CITIES[cityId].k / 10) * 10;
+function newCandidate() { const c = { name: pick(SUR) + pick(GIV), spd: rand(.85, 1.15), rel: rand(.85, 1), end: rand(.8, 1.2) }; c.wage = wageOf(c); return c; }
+
+// orders per game hour across the whole map, before rating/places
+function hourRate(h) {
+  h %= 24;
+  if (h >= 7 && h < 9) return 14;          // breakfast
+  if (h >= 11.5 && h < 13.5) return 38;    // lunch
+  if (h >= 15 && h < 16) return 12;        // afternoon tea
+  if (h >= 17.5 && h < 20.5) return 45;    // dinner
+  if (h >= 22 || h < 1) return 18;         // supper
+  if (h >= 6 && h < 7) return 3;
+  return 6;
+}
+function kindWeight(kind, h) {
+  h %= 24;
+  if (kind === 'fast_food') return 1.6;
+  if (kind === 'cafe') return h >= 14 && h < 17 ? 2.2 : h < 10 ? 1.4 : h >= 17.5 ? .4 : 1;
+  if (kind === 'restaurant') return (h >= 11 && h < 14) || (h >= 17 && h < 21) ? 1.3 : h < 10 ? .3 : 1;
+  return .5;   // supermarket / convenience
+}
+const ratingMul = () => clamp((S.rating - 2) / 2.5, .25, 1.2);
+// weather: one plan per day. Rain: a few hours, orders +40%, couriers −20%. Typhoon: all day, announced the day before.
+const WX = { sun: { icon: '☀️', name: '天晴', orders: 1, speed: 1 }, rain: { icon: '🌧', name: '落雨', orders: 1.4, speed: .8 }, typhoon: { icon: '🌀', name: '颱風', orders: 1.8, speed: .6 } };
+const wxNow = () => S.wx && S.t >= S.wx.from && S.t < S.wx.to ? S.wx.type : 'sun';
+function rollWeather() {
+  if (S.nextTyphoon) S.wx = { type: 'typhoon', from: DAY_START, to: DAY_END };
+  else if (Math.random() < .3) { const from = Math.round(rand(8, 20)) * 60; S.wx = { type: 'rain', from, to: Math.min(DAY_END, from + Math.round(rand(2, 5)) * 60) }; }
+  else S.wx = { type: 'sun', from: 0, to: 0 };
+  S.nextTyphoon = S.wx.type !== 'typhoon' && Math.random() < .06;
+}
+const wxText = () => S.wx.type === 'sun' ? '☀️ 全日天晴' : S.wx.type === 'typhoon' ? '🌀 颱風：全日單量 ×1.8，外送員慢 40%' : `🌧 ${hhmm(S.wx.from)}–${hhmm(S.wx.to)} 落雨：單量 +40%，外送員慢 20%`;
+
+function newDayStats() { return { done: 0, onTime: 0, late: 0, cancel: 0, blocked: 0, surge: 0, revenue: 0, cost: 0, rating0: S.rating }; }
+
+// ---------- zones ----------
+const cellAt = (x, y) => { const c = Math.floor((x - grid.x0) / CELL), r = Math.floor((y - grid.y0) / CELL); return c >= 0 && r >= 0 && c < grid.cols && r < grid.rows ? r * grid.cols + c : -1; };
+const near = (a, b) => Math.abs(cells[a].col - cells[b].col) <= 1 && Math.abs(cells[a].row - cells[b].row) <= 1;
+const zoneOf = c => c.zone ?? c.auto;
+const surgeOf = i => { const k = cells[i]; return k && k.surge && k.surge.until > S.t ? k.surge.pct : 0; };
+const BURST = 4;   // unassigned orders in one zone that count as a burst
+function setHome(c) {
+  const z = zoneOf(c); c.home = z == null ? c.base : cells[z].node;
+  if (c.st === 'idle' && c.node !== c.home) { c.st = 'back'; setPath(c, c.home); }
+  else if (c.st === 'back') setPath(c, c.home);
+}
+function station(c, z) { c.zone = z; c.auto = null; setHome(c); }
+// "at least N here": free couriers (no zone of their own) get lent to short cells, and handed back when no longer needed
+function rebalance() {
+  for (const k of cells) {
+    const have = S.couriers.filter(c => zoneOf(c) === k.i);
+    if (have.length > k.min) for (const c of have.filter(c => c.auto === k.i).slice(0, have.length - k.min)) { c.auto = null; setHome(c); }
+    for (let need = k.min - have.length; need > 0; need--) {
+      let best = null, bd = Infinity;
+      for (const c of S.couriers) if (zoneOf(c) == null) { const d = Math.hypot(c.x - G.x[k.node], c.y - G.y[k.node]); if (d < bd) { bd = d; best = c; } }
+      if (!best) break;
+      best.auto = k.i; setHome(best);
+    }
+  }
+}
+
+function spawnOrder() {
+  const h = S.t / 60, open = places.filter(p => p.on);
+  let tot = 0; for (const p of open) tot += kindWeight(p.kind, h);
+  let r = Math.random() * tot, p = open[0];
+  for (const q of open) { r -= kindWeight(q.kind, h); if (r <= 0) { p = q; break; } }
+  const zk = cells[p.cell];
+  if (zk && zk.stop > S.t) { S.today.blocked++; S.rating = clamp(S.rating - .004, 1, 5); return; }   // stopped zone: the customer is turned away
+  // destination: a home 0.3–3 km away
+  const px = G.x[p.node], py = G.y[p.node];
+  let home = null;
+  for (let i = 0; i < 30 && !home; i++) { const c = pick(homes), dd = Math.hypot(G.x[c.node] - px, G.y[c.node] - py); if (dd >= 300 && dd <= 3000) home = c; }
+  if (!home) return;
+  const km = Math.hypot(G.x[home.node] - px, G.y[home.node] - py) / 1000, k = CITIES[cityId].k;
+  const prep = rand(5, 12), est = prep + km * 1300 / SPEED_MPM;
+  S.orders.push({ id: S.nextId++, p, home, cell: p.cell, t0: S.t, ready: S.t + prep, due: S.t + Math.max(25, est + 15), km,
+    food: Math.round(rand(120, 600) * k), fee: Math.round((30 + 10 * km) * k), pay: Math.round((45 + 10 * km) * k),
+    bonus: Math.round((45 + 10 * km) * k * surgeOf(p.cell) / 100),
+    st: 'wait', c: null, mk: null });
+  S.recent.push([p.ll[0], p.ll[1], S.t]);
+}
+
+function setPath(c, toNode) { c.path = route(c.node, toNode); c.plen = lenOf(c.path); c.d = 0; c.target = toNode; }
+function assign(o, c) { o.st = 'taken'; o.c = c; c.order = o; c.st = 'toShop'; setPath(c, o.p.node); }
+function drop(c) {   // courier gives the order back; it goes to the queue again
+  const o = c.order; o.st = 'wait'; o.c = null; c.order = null; c.st = 'back'; setPath(c, c.home);
+}
+const isFree = c => (c.st === 'idle' || c.st === 'back') && c.stam > 15;
+// stationed couriers take their own zone first; next-door zones only while their own has nothing waiting
+function dispatch() {
+  const free = S.couriers.filter(isFree);
+  if (!free.length) return;
+  const waiting = new Map();
+  for (const o of S.orders) if (o.st === 'wait') waiting.set(o.cell, (waiting.get(o.cell) || 0) + 1);
+  for (const o of S.orders) {
+    if (o.st !== 'wait' || !free.length) continue;
+    const ox = G.x[o.p.node], oy = G.y[o.p.node];
+    let bi = -1, bd = Infinity;
+    free.forEach((c, i) => {
+      const z = zoneOf(c);
+      if (z != null && z !== o.cell && (o.cell < 0 || !near(z, o.cell) || waiting.get(z))) return;
+      const dd = Math.hypot(c.x - ox, c.y - oy) + (z != null && z !== o.cell ? 400 : 0);
+      if (dd < bd) { bd = dd; bi = i; }
+    });
+    if (bi < 0) continue;
+    waiting.set(o.cell, waiting.get(o.cell) - 1);
+    assign(o, free[bi]); free.splice(bi, 1);
+  }
+}
+
+// walk along the current path; returns true on arrival
+function move(c, gmin) {
+  if (!c.path) return true;
+  c.d = Math.min(c.plen, c.d + SPEED_MPM * c.spd * WX[wxNow()].speed * gmin);
+  let left = c.d;
+  for (let i = 1; i < c.path.length; i++) {
+    const [ax, ay] = c.path[i - 1], [bx, by] = c.path[i], sl = Math.hypot(bx - ax, by - ay);
+    if (left <= sl || i === c.path.length - 1) { const f = sl ? Math.min(1, left / sl) : 1; c.x = ax + (bx - ax) * f; c.y = ay + (by - ay) * f; break; }
+    left -= sl;
+  }
+  if (c.d >= c.plen) { c.node = c.target; c.path = null; return true; }
+  return false;
+}
+
+function finish(o, c) {
+  const late = S.t > o.due, T = S.today;
+  o.st = 'done'; T.done++;
+  const rev = o.food * S.comm / 100 + o.fee, comp = late ? o.fee + 30 * CITIES[cityId].k : 0, pay = (c.pay === 'comm' ? o.pay : 0) + o.bonus;
+  T.surge += o.bonus; if (c.gig) c.left--;
+  T.revenue += rev; T.cost += pay + comp; S.money += rev - pay - comp;
+  if (late) { T.late++; S.rating = clamp(S.rating - .012, 1, 5); } else { T.onTime++; S.rating = clamp(S.rating + .0015, 1, 5); }
+  c.order = null;
+}
+function cancel(o) {
+  o.st = 'cancel'; S.today.cancel++; S.rating = clamp(S.rating - .06, 1, 5);
+  if (o.c) { o.c.order = null; if (o.c.st === 'toShop' || o.c.st === 'waitFood') { o.c.st = 'back'; setPath(o.c, o.c.home); } }
+}
+
+// surge pulls in gig couriers for that zone: +100% ≈ one every 6 min, at most 1 + pct/25 at a time
+function gigs(gmin) {
+  for (const k of cells) {
+    const pct = surgeOf(k.i); if (!pct) continue;
+    k.gigCarry = (k.gigCarry || 0) + gmin * pct / 600;
+    if (k.gigCarry >= 1) {
+      k.gigCarry = 0;
+      if (S.couriers.filter(c => c.gig && c.zone === k.i).length < 1 + pct / 25)
+        { const g = newCourier(k.node, { gig: true, rel: rand(.75, .9), left: 1 + Math.floor(rand(0, 3)) }); g.zone = k.i; S.couriers.push(g); }
+    }
+  }
+  for (const c of S.couriers.filter(c => c.gig && c.st === 'idle' && (c.left <= 0 || !surgeOf(c.zone)))) dismiss(c);
+}
+function dismiss(c) { S.couriers.splice(S.couriers.indexOf(c), 1); if (c.mk) liveLayer.removeLayer(c.mk); if (sel === c) sel = null; }
+function step(gmin) {
+  S.t += gmin;
+  // new orders: expected count this slice, drawn one by one
+  S.carry = (S.carry || 0) + hourRate(S.t / 60) * WX[wxNow()].orders * ratingMul() * (places.filter(p => p.on).length / Math.max(1, places.length)) * gmin / 60;
+  while (S.carry >= 1) { S.carry--; spawnOrder(); }
+  if (Math.random() < S.carry * .02) { S.carry = 0; spawnOrder(); }
+  // customers give up on food that has not left the shop 15 min after the promised time
+  for (const o of S.orders) if ((o.st === 'wait' || o.st === 'taken') && !o.picked && S.t > o.due + 15) cancel(o);
+  if ((S.rebT = (S.rebT || 0) - gmin) <= 0) { S.rebT = 2; rebalance(); }
+  dispatch();
+  gigs(gmin);
+  for (const c of S.couriers) {
+    const busy = c.st !== 'idle' && c.st !== 'rest';
+    c.stam = clamp(c.stam + (c.st === 'rest' ? 2 : busy ? -.35 / c.end : .2) * gmin, 0, 100);
+    if (c.st === 'rest') { if (c.stam >= 80) { c.st = 'idle'; setHome(c); } continue; }
+    if (c.st === 'toShop') { if (move(c, gmin)) { if (Math.random() > c.rel) drop(c); else c.st = 'waitFood'; } }
+    else if (c.st === 'waitFood') { if (S.t >= c.order.ready) { c.st = 'deliver'; c.order.picked = true; setPath(c, c.order.home.node); } }
+    else if (c.st === 'deliver') { if (move(c, gmin)) { finish(c.order, c); c.st = c.stam < 15 ? 'rest' : 'back'; if (c.st === 'back') setPath(c, c.home); } }
+    else if (c.st === 'back') { if (move(c, gmin)) c.st = 'idle'; }
+  }
+  S.orders = S.orders.filter(o => o.st === 'wait' || o.st === 'taken' || (o.mk && (liveLayer.removeLayer(o.mk), o.mk = null)));
+  while (S.recent.length && S.recent[0][2] < S.t - 60) S.recent.shift();
+}
+
+// ---------- drawing ----------
+const hhmm = t => { const m = Math.floor(t) % (24 * 60); return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); };
+const money = v => CITIES[cityId].cur + Math.round(v).toLocaleString('en-US');
+const cellName = i => String.fromCharCode(65 + cells[i].col) + (grid.rows - cells[i].row);
+let heat = null, heatOn = true;
+function drawLive() {
+  for (const c of S.couriers) {
+    const ll = G.toLL(c.x, c.y), col = STATE[c.st][0];
+    if (!c.mk) {
+      c.mk = L.circleMarker(ll, { radius: 7, weight: 2.5, color: '#ffffff', fillOpacity: 1, bubblingMouseEvents: false }).addTo(liveLayer);
+      c.mk.bindTooltip('');
+    }
+    c.mk.setLatLng(ll); c.mk.setStyle({ fillColor: col, color: c === sel ? '#b6adff' : '#ffffff', weight: c === sel ? 4 : 2.5 });
+    c.mk.setTooltipContent(c.name + '・' + STATE[c.st][1] + (zoneOf(c) != null ? '・駐 ' + cellName(zoneOf(c)) : ''));
+  }
+  for (const o of S.orders) {
+    const col = o.st === 'wait' ? '#ff5d5d' : '#ff9f43';
+    if (!o.mk) { o.mk = L.circleMarker(o.p.ll, { radius: 9, weight: 2, fillOpacity: 0, bubblingMouseEvents: false }).addTo(liveLayer); o.mk.on('click', () => manualAssign(o)); }
+    o.mk.setStyle({ color: col, opacity: o.st === 'wait' ? .95 : .35 });
+  }
+}
+function drawCells(waiting) {
+  for (const k of cells) {
+    const have = S.couriers.filter(c => zoneOf(c) === k.i && !c.gig).length, pct = surgeOf(k.i), stop = k.stop > S.t;
+    const look = stop ? 'stop' : (waiting.get(k.i) || 0) >= BURST ? 'burst' : pct ? 'surge' : '';
+    if (k.look !== look) { k.look = look; k.rect.setStyle(look ? { fill: true, fillColor: { stop: '#6b7080', burst: '#ff5d5d', surge: '#f2c53d' }[look], fillOpacity: look === 'surge' ? .1 : .2 } : { fill: false }); }
+    const txt = cellName(k.i) + (have || k.min ? ` <b class="${have < k.min ? 'short' : ''}">${have}${k.min ? '/' + k.min : ''}</b>` : '') + (pct ? ' ⚡+' + pct + '%' : '') + (stop ? ' ⛔' : '');
+    if (k.lbl.html !== txt) { k.lbl.html = txt; k.lbl.setIcon(L.divIcon({ className: 'cell-lbl', html: txt, iconSize: null, iconAnchor: [-4, -3] })); }
+  }
+}
+let lastUi = 0;
+function drawUi(force) {
+  const now = performance.now(); if (!force && now - lastUi < 250) return; lastUi = now;
+  const T = S.today, wait = S.orders.filter(o => o.st === 'wait').length, act = S.orders.filter(o => o.st === 'taken').length;
+  $('tDay').textContent = '第 ' + S.day + ' 日'; $('tClock').textContent = hhmm(S.t);
+  const wn = wxNow(), soon = S.wx.type !== 'sun' && wn === 'sun' && S.t < S.wx.from;
+  $('tWx').textContent = WX[wn].icon + (soon ? ' ' + hhmm(S.wx.from) + ' ' + WX[S.wx.type].icon : ''); $('tWx').title = wxText();
+  $('rain').className = wn === 'typhoon' ? 'storm' : wn === 'rain' ? 'on' : '';
+  $('tMoney').textContent = money(S.money); $('tRate').textContent = S.rating.toFixed(2);
+  $('sDone').textContent = T.done; $('sOnTime').textContent = T.done ? Math.round(T.onTime / T.done * 100) + '%' : '–';
+  $('sWait').textContent = wait; $('sActive').textContent = act; $('sCancel').textContent = T.cancel;
+  $('sNet').textContent = money(T.revenue - T.cost);
+  $('crewN').textContent = '（' + S.couriers.length + '）';
+  const crew = S.couriers.map(c => `<div class="cr${c === sel ? ' sel' : ''}" data-id="${c.id}"><i class="dot" style="background:${STATE[c.st][0]}"></i><span>${c.name}${c.gig ? '<span class="gig">散工</span>' : ''}${zoneOf(c) != null ? `<span class="z">${c.zone != null ? '駐' : '補'} ${cellName(zoneOf(c))}</span>` : ''}</span><span class="st">${STATE[c.st][1]}</span><span class="bar"><i style="width:${Math.round(c.stam / 5) * 5}%;background:${c.stam < 25 ? 'var(--warn)' : 'var(--ok)'}"></i></span></div>`).join('');
+  if ($('crewList').dataset.h !== crew) { $('crewList').dataset.h = crew; $('crewList').innerHTML = crew; }
+  $('selBar').hidden = !sel;
+  if (sel) { $('selName').textContent = '已揀：' + sel.name; $('bUnzone').disabled = sel.zone == null; }
+  if (heat) heat.setLatLngs(heatOn ? [...S.orders.filter(o => o.st === 'wait').map(o => [...o.p.ll, 1]), ...S.recent.map(r => [r[0], r[1], .35])] : []);
+  // burst alerts: zones over the line get the two choices, running measures can be cancelled
+  const waiting = new Map(); for (const o of S.orders) if (o.st === 'wait') waiting.set(o.cell, (waiting.get(o.cell) || 0) + 1);
+  const burst = cells.filter(k => (waiting.get(k.i) || 0) >= BURST && !(k.stop > S.t));
+  const left = t => Math.ceil((t - S.t) / 5) * 5 + ' 分';
+  const al = burst.map(k => `<div class="al"><b>${cellName(k.i)} 區：${waiting.get(k.i)} 張冇人接</b>
+      <div class="row">加錢 ${[20, 50, 100].map(p => `<button data-surge="${p}" data-z="${k.i}"${surgeOf(k.i) === p ? ' disabled' : ''}>+${p}%</button>`).join('')}<button data-stop="${k.i}">停單 30 分</button><button data-self="${k.i}"${self ? ' disabled' : ''}>親自出馬</button></div></div>`).join('') +
+    cells.filter(k => surgeOf(k.i) || k.stop > S.t).map(k => `<div class="al act"><div class="row"><b>${cellName(k.i)}</b>${surgeOf(k.i) ? ` 加錢 +${surgeOf(k.i)}%（剩 ${left(k.surge.until)}）<button data-unsurge="${k.i}">取消</button>` : ''}${k.stop > S.t ? ` 停單（剩 ${left(k.stop)}）<button data-unstop="${k.i}">恢復</button>` : ''}</div></div>`).join('');
+  if ($('alertList').dataset.h !== al) { $('alertList').dataset.h = al; $('alertList').innerHTML = al; }
+  $('alerts').hidden = !al; $('tBurst').hidden = !burst.length;
+  drawCells(waiting);
+}
+
+// ---------- dispatch controls: select, drag to a zone, set a zone minimum, reassign ----------
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('on'), 1800); }
+function select(c) { sel = sel === c ? null : c; drawLive(); drawUi(true); }
+// pointer on a courier: catch it before Leaflet starts panning; a tap selects, a drag stations
+let drag = null, quietUntil = 0;   // the click that follows a courier tap/drag must not reach the map
+const mapEl = $('map'), ptIn = e => { const r = mapEl.getBoundingClientRect(); return L.point(e.clientX - r.left, e.clientY - r.top); };
+mapEl.addEventListener('pointerdown', e => {
+  const p = ptIn(e);
+  let hit = null, hd = 16;
+  for (const c of S.couriers) { const d = map.latLngToContainerPoint(G.toLL(c.x, c.y)).distanceTo(p); if (d < hd) { hd = d; hit = c; } }
+  if (!hit) return;
+  e.stopPropagation(); e.preventDefault(); drag = { c: hit, p };
+}, true);
+addEventListener('pointerup', e => {
+  if (!drag) return;
+  const { c, p } = drag, q = ptIn(e); drag = null; quietUntil = performance.now() + 400;
+  if (q.distanceTo(p) < 8) select(c); else dropOn(c, map.containerPointToLatLng(q));
+});
+function dropOn(c, ll) {
+  const z = cellAt(...G.toXY(ll.lat, ll.lng));
+  if (z < 0) return toast('呢度出咗服務範圍');
+  station(c, z); toast(c.name + ' 駐守 ' + cellName(z)); drawUi(true);
+}
+map.on('click', e => {
+  if (performance.now() < quietUntil) return;
+  if (sel) { dropOn(sel, e.latlng); sel = null; drawLive(); drawUi(true); return; }
+  const z = cellAt(...G.toXY(e.latlng.lat, e.latlng.lng)); if (z < 0) return;
+  const k = cells[z];
+  L.popup({ closeButton: false, autoPan: false }).setLatLng(G.toLL(G.x[k.node], G.y[k.node]))
+    .setContent(`<b>${cellName(z)} 區</b><div class="minbox">最少 <button data-min="-1" data-z="${z}">−</button><b id="minV">${k.min}</b><button data-min="1" data-z="${z}">＋</button> 人</div>`).openOn(map);
+});
+function manualAssign(o) {
+  if (!sel) return toast('先揀一個外送員，再撳呢張單');
+  if (o.st !== 'wait') return toast('呢張單已經有人接');
+  if (!isFree(sel)) return toast(sel.name + (sel.st === 'rest' || sel.stam <= 15 ? ' 太攰' : ' 手上有單'));
+  assign(o, sel); toast('改派俾 ' + sel.name); sel = null; drawLive(); drawUi(true);
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-min]');
+  if (b) { const k = cells[+b.dataset.z]; k.min = clamp(k.min + +b.dataset.min, 0, 9); $('minV').textContent = k.min; rebalance(); drawUi(true); return; }
+  const row = e.target.closest('.cr');
+  if (row) select(S.couriers.find(c => c.id === +row.dataset.id));
+});
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-surge],[data-stop],[data-unsurge],[data-unstop]'); if (!b) return;
+  const d = b.dataset;
+  if (d.surge) { const k = cells[+d.z]; k.surge = { pct: +d.surge, until: S.t + 60 }; toast(cellName(k.i) + ' 區加錢 +' + d.surge + '%，散工會陸續上線'); }
+  else if (d.stop) { const k = cells[+d.stop]; k.stop = S.t + 30; toast(cellName(k.i) + ' 區停單 30 分鐘'); }
+  else if (d.unsurge) cells[+d.unsurge].surge = null;
+  else cells[+d.unstop].stop = 0;
+  drawUi(true);
+});
+// ---------- 親自出馬: drive on the map, then park ----------
+// the dispatch clock keeps going at ×¼ while you are out
+const ME = { name: '你', self: true };
+const PARK_LEVELS = { moto: { dir: 'tw', n: 5 }, car: { dir: 'hk', n: 6 } };
+let self = null, prevSpeed = 1;
+function startSelf(o, veh) {
+  if (self) return;
+  if (!veh && CITIES[cityId].veh === 'both') {
+    overlay(`<h2>親自出馬</h2><p>揸咩車去？</p><div style="display:flex;gap:8px;justify-content:center"><button class="pri" data-veh="moto">電單車（泊機車格）</button><button class="pri" data-veh="car">私家車（窄位泊車）</button></div><p style="margin-top:12px"><button id="bVehNo">唔去住</button></p>`);
+    $('ovCard').onclick = e => { const b = e.target.closest('[data-veh]'); if (b) { $('ovCard').onclick = null; overlay(''); startSelf(o, b.dataset.veh); } else if (e.target.id === 'bVehNo') { $('ovCard').onclick = null; overlay(''); } };
+    return;
+  }
+  veh = veh || CITIES[cityId].veh;
+  o.st = 'taken'; o.c = ME;
+  // system estimate: an ordinary courier on the best route, with the usual wait at big junctions; you ride 15% faster, so dodging jams beats it
+  const route0 = routeNodes(o.p.node, o.home.node), est = lenOf(route0.map(n => [G.x[n], G.y[n]])) / SPEED_MPM + route0.filter(n => G.adj[n].length >= 4).length * .3 * .85;
+  // a couple of traffic jams sitting on or near the suggested route
+  const jams = [];
+  for (let i = 0; i < 2 && route0.length > 6; i++) { const n = route0[Math.floor(route0.length * rand(.25, .8))]; jams.push({ x: G.x[n] + rand(-60, 60), y: G.y[n] + rand(-60, 60), r: rand(90, 150) }); }
+  self = { o, veh, phase: S.t < o.ready ? 'wait' : 'drive', u: o.p.node, v: null, d: 0, len: 0, queued: null, t0: S.t, est, jams, red: 0, ev: '', mk: null, gps: null, jl: [] };
+  self.jl = jams.map(j => L.circle(G.toLL(j.x, j.y), { radius: j.r, color: '#ff5d5d', weight: 1, fillColor: '#ff5d5d', fillOpacity: .18, interactive: false }).addTo(liveLayer));
+  self.mk = L.circleMarker(o.p.ll, { radius: 9, weight: 3, color: '#ffffff', fillColor: '#f2c53d', fillOpacity: 1, interactive: false }).addTo(liveLayer);
+  self.gps = L.polyline([], { color: '#b6adff', weight: 4, opacity: .8, dashArray: '6 8', interactive: false }).addTo(liveLayer);
+  self.dst = L.circleMarker(o.home.ll, { radius: 8, weight: 3, color: '#b6adff', fill: false, interactive: false }).addTo(liveLayer);
+  prevSpeed = S.speed || 1; S.speed = .25; markSpeed(); $('speed').classList.add('lock');
+  if (self.phase === 'drive') { self.td = S.t; nextEdge(); }
+  map.setView(o.p.ll, 17); $('selfBar').hidden = false; $('side').classList.remove('open'); drawSelf();
+}
+const turnOf = (u, v, w) => {   // signed turn angle at v going u→v→w, + = left
+  const a1 = Math.atan2(G.y[v] - G.y[u], G.x[v] - G.x[u]), a2 = Math.atan2(G.y[w] - G.y[v], G.x[w] - G.x[v]);
+  let d = a2 - a1; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return d;
+};
+function nextEdge() {
+  const s = self, at = s.v == null ? s.u : s.v, from = s.v == null ? null : s.u;
+  let opts = G.adj[at].filter(n => n !== from); if (!opts.length) opts = G.adj[at];
+  let next = null;
+  if (s.queued && from != null && opts.length > 1) {
+    const want = { L: 1, S: 0, R: -1 }[s.queued];
+    const score = n => { const t = turnOf(from, at, n); return want === 0 ? Math.abs(t) : Math.abs(t - want * Math.PI / 2); };
+    const best = opts.reduce((a, b) => score(b) < score(a) ? b : a);
+    if (want === 0 || Math.sign(turnOf(from, at, best)) === want && Math.abs(turnOf(from, at, best)) > .4) { next = best; s.queued = null; }
+  }
+  if (next == null) { const p = routeNodes(at, s.o.home.node); next = p[1] ?? opts[0]; }
+  // traffic lights at bigger junctions
+  if (from != null && G.adj[at].length >= 4 && Math.random() < .3) { s.red = rand(.5, 1.2); s.ev = '🚦 紅燈'; }
+  s.u = at; s.v = next; s.d = 0; s.len = Math.hypot(G.x[next] - G.x[at], G.y[next] - G.y[at]) || .1;
+  s.gpsPts = routeNodes(next, s.o.home.node).map(n => G.toLL(G.x[n], G.y[n]));
+}
+function selfStep(g) {
+  const s = self; if (!s || s.phase === 'park' || s.phase === 'done') return;
+  if (s.phase === 'wait') { if (S.t >= s.o.ready) { s.phase = 'drive'; s.td = S.t; nextEdge(); } return; }
+  if (s.red > 0) { s.red -= g; if (s.red <= 0) s.ev = ''; return; }
+  const px = G.x[s.u] + (G.x[s.v] - G.x[s.u]) * s.d / s.len, py = G.y[s.u] + (G.y[s.v] - G.y[s.u]) * s.d / s.len;
+  const jam = s.jams.some(j => Math.hypot(px - j.x, py - j.y) < j.r);
+  if (!s.ev.startsWith('🚦')) s.ev = jam ? '🚗 塞車，慢咗好多' : '';
+  s.d += SPEED_MPM * 1.15 * WX[wxNow()].speed * (jam ? .5 : 1) * g;
+  while (s.d >= s.len) {
+    s.d -= s.len;
+    if (s.v === s.o.home.node) { arrive(); return; }
+    nextEdge(); if (s.red > 0) { s.d = 0; return; }
+  }
+}
+function drawSelf() {
+  const s = self; if (!s) return;
+  const ll = s.v == null ? G.toLL(G.x[s.u], G.y[s.u]) : G.toLL(G.x[s.u] + (G.x[s.v] - G.x[s.u]) * s.d / s.len, G.y[s.u] + (G.y[s.v] - G.y[s.u]) * s.d / s.len);
+  s.mk.setLatLng(ll); s.gps.setLatLngs(s.v == null ? [] : [ll, ...(s.gpsPts || [])]);
+  if (s.phase === 'drive' && !map.getBounds().pad(-.25).contains(ll)) map.panTo(ll, { animate: false });
+  const used = S.t - (s.td ?? S.t);   // driving time only, so it compares with the system estimate
+  $('sfTitle').textContent = s.phase === 'wait' ? '等餐中…' : '送去 ' + (s.o.p.name || '客人') + ' 嘅單';
+  $('sfEta').textContent = (s.phase === 'wait' ? '剩 ' + Math.ceil(s.o.ready - S.t) + ' 分出餐' : '用咗 ' + used.toFixed(1) + ' 分／系統預計 ' + s.est.toFixed(1) + ' 分');
+  $('sfEv').textContent = s.ev || (s.queued ? '下個路口：' + { L: '左轉', S: '直行', R: '右轉' }[s.queued] : '跟住導航行');
+  document.querySelectorAll('[data-turn]').forEach(b => b.classList.toggle('on', b.dataset.turn === s.queued));
+}
+function arrive() {
+  const s = self; s.phase = 'park'; s.routeT = S.t - s.t0; s.driveT = S.t - s.td; s.ev = '';
+  // harder parking where the street is busier (night-market / old-district feel)
+  const dens = places.filter(p => p.cell === cells[cellAt(G.x[s.o.home.node], G.y[s.o.home.node])]?.i).length;
+  const pk = PARK_LEVELS[s.veh], lv = Math.min(pk.n - 1, dens >= 15 ? 3 + Math.floor(Math.random() * 2) : dens >= 6 ? 1 + Math.floor(Math.random() * 2) : 0);
+  $('park').src = '../' + pk.dir + '/?challenge=1&level=' + lv; $('park').hidden = false; $('selfBar').hidden = true;
+}
+addEventListener('message', e => {
+  if (e.origin !== location.origin || !e.data || e.data.type !== 'parking-result' || !self || self.phase !== 'park') return;
+  const s = self, r = e.data, o = s.o, k = CITIES[cityId].k, T = S.today;
+  $('park').hidden = true; $('park').src = 'about:blank'; s.phase = 'done';
+  const parkT = (r.time || 60) * 1.5 / 60, total = s.routeT + parkT, late = !r.ok || s.t0 + total > o.due;
+  const rev = o.food * S.comm / 100 + o.fee, comp = late ? o.fee + 30 * k : 0;
+  const tip = r.ok ? Math.max(0, Math.round((30 + (r.stars === 3 ? 40 : 0) - 15 * r.damage) * k)) : 0, complaint = r.damage >= 3;
+  o.st = 'done'; T.done++; T.revenue += rev + tip; T.cost += comp; S.money += rev + tip - comp;
+  if (late) { T.late++; S.rating = clamp(S.rating - .012, 1, 5); } else { T.onTime++; S.rating = clamp(S.rating + .0015, 1, 5); }
+  if (complaint) S.rating = clamp(S.rating - .05, 1, 5);
+  overlay(`<h2>${r.ok ? '送到！' : '放棄咗，遲咗交'}</h2><table>
+    <tr><td>路上</td><td>${s.driveT.toFixed(1)} 分（系統預計 ${s.est.toFixed(1)}）</td></tr>
+    <tr><td>泊車</td><td>${r.ok ? r.time.toFixed(0) + ' 秒・' + '★'.repeat(r.stars) : '–'}</td></tr>
+    <tr><td>準時</td><td class="${late ? 'neg' : 'pos'}">${late ? '遲咗' : '準時'}</td></tr>
+    <tr><td>收入（抽成＋運費）</td><td>${money(rev)}</td></tr>
+    <tr><td>貼士</td><td>${money(tip)}</td></tr>
+    ${comp ? `<tr><td>遲到賠償</td><td class="neg">−${money(comp)}</td></tr>` : ''}
+    ${complaint ? '<tr><td>客人投訴</td><td class="neg">評分 −0.05</td></tr>' : ''}
+  </table><button class="pri" id="bBack">返調度中心</button>`);
+  $('bBack').onclick = endSelf;
+});
+function endSelf() {
+  const s = self; if (!s) return;
+  [s.mk, s.gps, s.dst, ...s.jl].forEach(l => liveLayer.removeLayer(l));
+  self = null; $('selfBar').hidden = true; $('speed').classList.remove('lock');
+  S.speed = prevSpeed; markSpeed(); overlay('');
+  const b = bboxOf(CITIES[cityId]); map.fitBounds([[b[0], b[1]], [b[2], b[3]]]);
+  drawUi(true);
+}
+function pickSelf(z) {
+  const o = S.orders.filter(o => o.st === 'wait' && (z == null || o.cell === z)).sort((a, b) => a.t0 - b.t0)[0];
+  if (!o) return toast('而家冇等緊人接嘅單');
+  startSelf(o);
+}
+$('bSelf').onclick = () => pickSelf(null);
+document.addEventListener('click', e => { const b = e.target.closest('[data-self],[data-turn]'); if (!b) return;
+  if (b.dataset.self != null) pickSelf(+b.dataset.self);
+  else if (self) { self.queued = self.queued === b.dataset.turn ? null : b.dataset.turn; drawSelf(); } });
+addEventListener('keydown', e => {
+  if (!self || self.phase !== 'drive') return;
+  const t = { ArrowLeft: 'L', ArrowUp: 'S', ArrowRight: 'R' }[e.key]; if (!t) return;
+  e.preventDefault(); self.queued = t; drawSelf();
+});
+$('tBurst').onclick = () => { $('side').classList.add('open'); $('alerts').scrollIntoView({ block: 'nearest' }); };
+$('bUnzone').onclick = () => { if (sel) { station(sel, null); drawUi(true); } };
+$('bUnsel').onclick = () => select(sel);
+$('bHeat').onclick = () => { heatOn = !heatOn; $('bHeat').textContent = '熱力圖：' + (heatOn ? '開' : '閂'); drawUi(true); };
+
+// ---------- staff market (before each day) ----------
+let mTab = 'hire';
+function openMarket() {
+  S.speed = 0; markSpeed();
+  const k = CITIES[cityId];
+  const attrs = c => `<div class="attrs">速度<span class="m"><i style="width:${(c.spd - .8) / .4 * 100}%"></i></span>可靠<span class="m"><i style="width:${(c.rel - .8) / .2 * 100}%"></i></span>體力<span class="m"><i style="width:${(c.end - .7) / .6 * 100}%"></i></span></div>`;
+  const hire = S.market.map((c, i) => `<div class="mrow"><b>${c.name}</b><span class="btns"><button data-hire="${i}" data-pay="wage">日薪 ${money(c.wage)}</button><button data-hire="${i}" data-pay="comm">純抽成</button></span>${attrs(c)}</div>`).join('') || '<p style="color:var(--dim)">今日冇人應徵，聽日再嚟。</p>';
+  const staff = S.couriers.map(c => `<div class="mrow"><span><b>${c.name}</b> <span style="color:var(--dim);font-size:12px">${c.pay === 'wage' ? '日薪 ' + money(c.wage) : '純抽成'}${c.zone != null ? '・駐 ' + cellName(c.zone) : ''}</span></span><span class="btns"><button data-fire="${c.id}"${S.couriers.length <= 1 ? ' disabled' : ''}>辭退</button></span>${attrs(c)}</div>`).join('');
+  const wages = S.couriers.reduce((s, c) => s + (c.pay === 'wage' ? c.wage : 0), 0);
+  overlay(`<h2>人力市場 <button class="info" data-info="market">i</button></h2>
+    <div class="tabs"><button data-tab="hire" class="${mTab === 'hire' ? 'on' : ''}">請人（${S.market.length}）</button><button data-tab="staff" class="${mTab === 'staff' ? 'on' : ''}">現有人手（${S.couriers.length}）</button></div>
+    <div class="mlist">${mTab === 'hire' ? hire : staff}</div>
+    <p style="font-size:13px;color:var(--ink);margin:10px 0 0;flex:none">今日天氣：${wxText()}</p>
+    <div class="mfoot"><span>💰${money(S.money)}　今日日薪 ${money(wages)}</span><button class="pri" id="bGo">開始第 ${S.day} 日</button></div>`, 'market');
+  $('bGo').onclick = startDay;
+}
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-tab],[data-hire],[data-fire]'); if (!t || $('overlay').hidden) return;
+  if (t.dataset.tab) mTab = t.dataset.tab;
+  else if (t.dataset.hire != null) {
+    const c = S.market.splice(+t.dataset.hire, 1)[0];
+    S.couriers.push(newCourier(pick(places).node, { name: c.name, spd: c.spd, rel: c.rel, end: c.end, pay: t.dataset.pay, wage: t.dataset.pay === 'wage' ? c.wage : 0 }));
+  } else {
+    const c = S.couriers.find(c => c.id === +t.dataset.fire);
+    if (c) { S.couriers.splice(S.couriers.indexOf(c), 1); if (c.mk) liveLayer.removeLayer(c.mk); if (sel === c) sel = null; }
+  }
+  openMarket();
+});
+function startDay() {
+  const T = S.today = newDayStats();
+  for (const c of S.couriers) if (c.pay === 'wage') { T.cost += c.wage; S.money -= c.wage; }
+  for (const c of S.couriers) { c.st = 'idle'; c.order = null; c.path = null; c.stam = 100; setHome(c); c.node = c.home; c.x = G.x[c.home]; c.y = G.y[c.home]; c.st = 'idle'; c.path = null; }
+  rebalance(); overlay(''); S.speed = 1; markSpeed(); drawLive(); drawUi(true);
+}
+
+// ---------- day flow ----------
+function endDay() {
+  S.speed = 0; markSpeed();
+  for (const o of S.orders) if (o.st === 'wait' || o.st === 'taken') cancel(o);
+  for (const c of S.couriers.filter(c => c.gig)) dismiss(c);
+  for (const k of cells) { k.surge = null; k.stop = 0; }
+  // restaurants react to the commission: above 25% some leave, at 20% or below some come back
+  let left = 0, back = 0;
+  for (const p of places) {
+    if (p.on && S.comm > 25 && Math.random() < (S.comm - 25) * .015) { p.on = false; left++; }
+    else if (!p.on && S.comm <= 20 && Math.random() < .05) { p.on = true; back++; }
+  }
+  const T = S.today, net = T.revenue - T.cost, dr = S.rating - T.rating0, cls = v => v >= 0 ? 'pos' : 'neg';
+  overlay(`<h2>第 ${S.day} 日日結</h2><table>
+    <tr><td>完成單數</td><td>${T.done}</td></tr>
+    <tr><td>準時率</td><td>${T.done ? Math.round(T.onTime / T.done * 100) + '%' : '–'}</td></tr>
+    <tr><td>取消</td><td>${T.cancel}</td></tr>
+    ${T.blocked ? `<tr><td>停單擋咗</td><td>${T.blocked} 張</td></tr>` : ''}
+    <tr><td>收入</td><td>${money(T.revenue)}</td></tr>
+    ${T.surge ? `<tr><td>加錢獎金（已計入支出）</td><td>${money(T.surge)}</td></tr>` : ''}
+    <tr><td>支出</td><td>${money(T.cost)}</td></tr>
+    <tr><td>淨利</td><td class="${cls(net)}">${money(net)}</td></tr>
+    <tr><td>評分變化</td><td class="${cls(dr)}">${(dr >= 0 ? '+' : '') + dr.toFixed(2)}（${S.rating.toFixed(2)}）</td></tr>
+    ${left || back ? `<tr><td>餐廳變動</td><td>${back ? '+' + back + ' 加入 ' : ''}${left ? '−' + left + ' 退出' : ''}</td></tr>` : ''}
+  </table>${S.nextTyphoon ? '<p style="color:var(--warn)">🌀 天文台預告：聽日颱風，單量會好誇張，記得多請人。</p>' : ''}<p style="font-size:12px">已自動儲存</p><button class="pri" id="bNext">去人力市場</button>`);
+  S.day++; S.t = DAY_START; S.orders.forEach(o => o.mk && liveLayer.removeLayer(o.mk)); S.orders = []; S.recent = [];
+  S.market = Array.from({ length: 6 }, newCandidate); rollWeather(); save();
+  $('bNext').onclick = () => { mTab = 'hire'; openMarket(); };
+}
+
+let last = 0;
+function frame(now) {
+  const dt = Math.min(.1, (now - (last || now)) / 1000); last = now;
+  if (G && S.speed && $('overlay').hidden) {
+    let g = dt * S.speed * GMIN_PER_SEC;
+    while (g > 0) { const s = Math.min(.25, g); step(s); selfStep(s); g -= s; if (S.t >= DAY_END && !self) { endDay(); break; } }
+    drawLive(); drawSelf();
+  }
+  if (G) drawUi();
+  requestAnimationFrame(frame);
+}
+
+// ---------- setup ----------
+function setupWorld(d) {
+  baseLayer.clearLayers(); liveLayer.clearLayers();
+  const c = CITIES[cityId], b = bboxOf(c);
+  map.setMaxBounds(L.latLngBounds([b[0] - .01, b[1] - .01], [b[2] + .01, b[3] + .01]));
+  map.fitBounds([[b[0], b[1]], [b[2], b[3]]]);
+  buildGraph(d);
+  for (const w of d.W) baseLayer.addLayer(L.polyline(w.map(i => [d.N[2 * i], d.N[2 * i + 1]]), { color: '#3b4252', weight: 2, opacity: .6, interactive: false }));
+  // zone grid over the service area
+  const [x0, y0] = G.toXY(b[0], b[1]), [x1, y1] = G.toXY(b[2], b[3]);
+  grid = { x0, y0, cols: Math.ceil((x1 - x0) / CELL), rows: Math.ceil((y1 - y0) / CELL) };
+  cells = [];
+  for (let r = 0; r < grid.rows; r++) for (let col = 0; col < grid.cols; col++) {
+    const cx = x0 + (col + .5) * CELL, cy = y0 + (r + .5) * CELL, i = cells.length;
+    const sw = G.toLL(x0 + col * CELL, y0 + r * CELL), ne = G.toLL(x0 + (col + 1) * CELL, y0 + (r + 1) * CELL);
+    const rect = L.rectangle([sw, ne], { color: '#7c6cff', weight: 1, opacity: .18, fill: false, interactive: false }); baseLayer.addLayer(rect);
+    const lbl = L.marker([ne[0], sw[1]], { interactive: false, keyboard: false }); lbl.html = ''; baseLayer.addLayer(lbl);
+    cells.push({ i, col, row: grid.rows - 1 - r, node: G.snap(cx, cy), min: 0, lbl, rect, surge: null, stop: 0, look: '' });
+  }
+  places = d.P.filter(p => KIND[p[2]]).map(([la, lo, kind, name]) => { const [px, py] = G.toXY(la, lo); return { ll: [la, lo], node: G.snap(px, py), cell: cellAt(px, py), kind, name, on: true }; });
+  homes = d.H.map(([la, lo]) => ({ ll: [la, lo], node: G.snap(...G.toXY(la, lo)) }));
+  for (const p of places) {
+    const m = L.circleMarker(p.ll, { radius: 3, color: KIND[p.kind][0], weight: 0, fillColor: KIND[p.kind][0], fillOpacity: .5 });
+    m.bindTooltip((p.name || '（冇名）') + '・' + KIND[p.kind][1]); baseLayer.addLayer(m);
+  }
+  // one heat layer for the whole session: removing it while a redraw is queued throws inside leaflet.heat
+  if (!heat) heat = L.heatLayer([], { radius: 28, blur: 24, maxZoom: 16, minOpacity: .25, gradient: { .3: '#3b2f8f', .6: '#ff5d5d', 1: '#ffd166' } }).addTo(map);
+  heat.setLatLngs([]);
+  S.couriers = []; S.orders = []; S.recent = []; S.t = DAY_START;
+  const sv = readSave().cities[cityId];
+  if (sv) {
+    Object.assign(S, { day: sv.day, money: sv.money, rating: sv.rating, comm: sv.comm, market: sv.market, wx: sv.wx, nextTyphoon: sv.nextTyphoon });
+    for (const c of sv.couriers) { const n = newCourier(pick(places).node, c); S.couriers.push(n); if (c.zone != null && cells[c.zone]) station(n, c.zone); }
+    sv.mins.forEach((m, i) => { if (cells[i]) cells[i].min = m; });
+    sv.off.forEach(i => { if (places[i]) places[i].on = false; });
+  } else {
+    // new game: 8 couriers on commission, no zone, fine weather on day one
+    Object.assign(S, { day: 1, money: Math.round(20000 * c.k / 100) * 100, rating: 4.5, comm: 25, wx: { type: 'sun', from: 0, to: 0 }, nextTyphoon: false });
+    for (let i = 0; i < 8; i++) S.couriers.push(newCourier(pick(places).node));
+    S.market = Array.from({ length: 6 }, newCandidate);
+  }
+  S.today = newDayStats(); $('comm').value = S.comm;
+  $('tCity').textContent = c.name;
+  $('legend').innerHTML = Object.values(STATE).map(([col, n]) => `<span><i class="dot" style="background:${col}"></i>${n}</span>`).join('') + '<span><i class="dot" style="border:2px solid #ff5d5d"></i>冇人接</span>';
+  drawLive(); drawUi(true);
+}
+
+function overlay(html, cls) { $('ovCard').className = 'card' + (cls ? ' ' + cls : ''); $('ovCard').innerHTML = html; $('overlay').hidden = !html; }
+// ---------- save (one key, a slot per city) ----------
+const SAVE_KEY = 'wsfy-save';
+function readSave() { try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); if (s && s.cities) return s; } catch {} return { cur: null, cities: {} }; }
+function save() {
+  const all = readSave();
+  all.cur = cityId;
+  all.cities[cityId] = { day: S.day, money: Math.round(S.money), rating: S.rating, comm: S.comm, market: S.market, wx: S.wx, nextTyphoon: S.nextTyphoon,
+    couriers: S.couriers.filter(c => !c.gig).map(c => ({ name: c.name, spd: c.spd, rel: c.rel, end: c.end, pay: c.pay, wage: c.wage, zone: c.zone })),
+    mins: cells.map(k => k.min), off: places.map((p, i) => p.on ? -1 : i).filter(i => i >= 0) };
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(all)); } catch {}
+}
+function pickCity(note) {
+  S.speed = 0; markSpeed();
+  const sv = readSave();
+  overlay(`<h2>外送風雲</h2><p style="margin-bottom:10px">揀一個城市做中央調度。${note || ''}</p><div class="cities">${Object.entries(CITIES).map(([id, c]) => { const s = sv.cities[id];
+    return `<div class="city"><h3>${c.name}</h3><span class="btns"><button class="pri" data-city="${id}">${s ? '繼續' : '開始'}</button>${s ? `<button data-reset="${id}">重新開始</button>` : ''}</span>
+      <p>${c.area}・${c.vehName}<br>${s ? `第 ${s.day} 日・💰${c.cur}${s.money.toLocaleString('en-US')}・⭐${s.rating.toFixed(2)}` : '新遊戲'}</p></div>`; }).join('')}</div>`, 'market');
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-city],[data-reset]'); if (!b) return;
+  if (b.dataset.reset) {
+    if (!confirm(CITIES[b.dataset.reset].name + '嘅存檔會刪除，由第 1 日重新開始？')) return;
+    const all = readSave(); delete all.cities[b.dataset.reset]; try { localStorage.setItem(SAVE_KEY, JSON.stringify(all)); } catch {}
+    return pickCity();
+  }
+  if (self) endSelf();
+  cityId = b.dataset.city; sel = null; start(false);
+});
+$('tCityBtn').onclick = () => pickCity('今日未收工嘅進度唔會儲存。');
+async function start(force) {
+  overlay('<div class="spin"></div><h2>載入地圖中</h2><p>第一次開要由 OpenStreetMap 抓資料，大約十幾秒。</p>');
+  try { setupWorld(await loadCity(cityId, force)); openMarket(); }
+  catch (e) {
+    console.warn('map load failed', e);
+    overlay('<h2>地圖載入失敗</h2><p>OpenStreetMap 資料暫時抓唔到，可能係網絡問題或者伺服器太忙。</p><button class="pri" id="bRetry">重試</button>');
+    $('bRetry').onclick = () => start(force);
+  }
+}
+
+function markSpeed() { document.querySelectorAll('#speed button').forEach(b => b.classList.toggle('on', +b.dataset.s === S.speed)); }
+$('speed').onclick = e => { const b = e.target.closest('button'); if (!b) return; S.speed = +b.dataset.s; markSpeed(); };
+$('comm').onchange = e => { S.comm = +e.target.value; };
+$('bReload').onclick = () => start(true);
+$('grip').onclick = () => $('side').classList.toggle('open');
+
+// ⓘ popovers: fixed width, positioned near the button
+const INFO = {
+  comm: '平台由每張單嘅食物價錢抽呢個百分比。抽得高每單賺多啲，但抽成高過 25%，每日收工都會有餐廳退出平台，單量跟住跌；調返 20% 或以下，退出咗嘅餐廳會慢慢返嚟。',
+  zone: '地圖分成 400 米一格。將外送員拖去一格（手機：先撳外送員，再撳格），佢就駐守嗰格：優先接本格嘅單，本格冇單先接隔籬格，送完返嚟等。撳一格可以設定「最少幾多人」，冇駐守嘅外送員會自動被派去補位。揀咗外送員再撳紅圈（冇人接嘅單）就係手動改派。',
+  self: '自己接一張等緊人接嘅單（爆單警報入面撳就接嗰區嘅）。調度中心會減慢到 ×¼，但唔會停。路上會跟導航自動行，你可以預先揀下個路口左轉／直行／右轉（鍵盤 ← ↑ →）去避開塞車（紅圈）同紅燈。到咗目的地要泊車：機車用機車格地獄，汽車用窄位泊車王，街道越旺越難泊。準時有評分，三星泊車有額外貼士，推冧車／花痕會扣貼士，太多會俾人投訴。',
+  burst: '某一區冇人接嘅單去到 4 張就算爆單，嗰格會變紅。加錢：嗰區每張新單俾外送員額外獎金（+20% 至 +100%），維持 60 分鐘，會有散工陸續上線幫手，加得越多嚟得越快，但每單賺少咗。停單：嗰區 30 分鐘唔接新單，冇收入，評分會輕微跌，但唔會再積遲到。',
+  market: '日薪：每日開工前俾一次人工，佢當日送幾多單都唔使再俾錢，爆單日最抵。純抽成：冇底薪，每送一單先俾一次錢，淡日最抵。請返嚟嘅人會一直留低，唔要就喺「現有人手」辭退。',
+};
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-info]'), pop = $('pop');
+  if (!b) { if (!e.target.closest('#pop')) pop.hidden = true; return; }
+  pop.textContent = INFO[b.dataset.info]; pop.hidden = false;
+  const r = b.getBoundingClientRect();
+  pop.style.left = clamp(r.left - 140, 12, innerWidth - pop.offsetWidth - 12) + 'px';
+  pop.style.top = (r.top > pop.offsetHeight + 20 ? r.top - pop.offsetHeight - 8 : r.bottom + 8) + 'px';
+});
+
+if (location.hash === '#dev') window.wsfy = { S, save, readSave, rollWeather, step, endDay, startDay, drawLive, drawUi, rebalance, station, startSelf, selfStep, drawSelf, get self() { return self; }, get cells() { return cells; } };   // test hook: fast-forward from the console
+{ const cur = readSave().cur; if (cur && CITIES[cur]) { cityId = cur; start(false); } else pickCity(); }
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
