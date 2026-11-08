@@ -4,30 +4,30 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>泊車地獄</title>
-<meta name="description" content="香港地庫窄位泊車，定台灣騎樓機車格？揀一個開始。">
+<meta name="description" content="香港地庫窄位泊車、台灣騎樓機車格，定係做外送平台調度？揀一個開始。">
 <meta name="theme-color" content="#0b0d12">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta property="og:type" content="website">
 <meta property="og:title" content="泊車地獄">
-<meta property="og:description" content="香港地庫窄位泊車，定台灣騎樓機車格？揀一個開始。">
+<meta property="og:description" content="香港地庫窄位泊車、台灣騎樓機車格，定係做外送平台調度？揀一個開始。">
 <meta property="og:url" content="https://fiveathree.github.io/pkparking/">
 <meta property="og:image" content="https://fiveathree.github.io/pkparking/og-image.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="泊車地獄">
-<meta name="twitter:description" content="香港窄位泊車王 · 台灣機車格地獄">
+<meta name="twitter:description" content="香港窄位泊車王 · 台灣機車格地獄 · 外送風雲">
 <meta name="twitter:image" content="https://fiveathree.github.io/pkparking/og-image.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@500;700;900&family=IBM+Plex+Mono:wght@500;600&display=swap">
 <style>
-/* Layout: one screen; title strip on top, two game doors side by side (stacked on phones) */
+/* Layout: one screen; title strip on top, three game doors side by side (stacked on phones) */
 :root{
   --bg:#0b0d12; --panel:#151922; --line:#2a3040; --ink:#f1ede4; --muted:#8f95a3;
-  --hk:#f2c53d; --tw:#3fd1a8;
+  --hk:#f2c53d; --tw:#3fd1a8; --dl:#7c6cff;
   --f-display:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
   --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
   color-scheme:dark;
@@ -41,24 +41,26 @@ main{height:100%;display:flex;flex-direction:column;gap:14px;max-width:1100px;ma
 header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
 h1{margin:0;font-weight:900;font-size:clamp(32px,8vw,52px);line-height:1;letter-spacing:.03em}
 header p{margin:0;color:var(--muted);font-size:15px}
-.doors{flex:1;min-height:0;display:grid;grid-template-columns:1fr 1fr;gap:14px}
-@media (max-aspect-ratio:4/5){.doors{grid-template-columns:1fr;grid-template-rows:1fr 1fr}}
+.doors{flex:1;min-height:0;display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+@media (max-aspect-ratio:4/5){.doors{grid-template-columns:1fr;grid-template-rows:1fr 1fr 1fr}}
 .door{min-height:0;display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;
   color:inherit;text-decoration:none;transition:border-color .15s,transform .15s}
 .door:hover,.door:focus-visible{transform:translateY(-2px);outline:none}
 .door.hk:hover,.door.hk:focus-visible{border-color:var(--hk)}
 .door.tw:hover,.door.tw:focus-visible{border-color:var(--tw)}
+.door.dl:hover,.door.dl:focus-visible{border-color:var(--dl)}
 .pic{flex:1;min-height:0;background-size:cover;background-position:center}
 .hk .pic{background-image:url(hk/thumb.jpg)}
 .tw .pic{background-image:url(tw/thumb.jpg)}
+.dl .pic{background-image:url(delivery/thumb.jpg)}
 .info{display:flex;align-items:center;gap:12px;padding:12px 14px;border-top:1px solid var(--line)}
 .tag{font-family:var(--f-mono);font-weight:600;font-size:13px;padding:2px 8px;border-radius:3px;color:#111}
-.hk .tag{background:var(--hk)} .tw .tag{background:var(--tw)}
+.hk .tag{background:var(--hk)} .tw .tag{background:var(--tw)} .dl .tag{background:var(--dl);color:#fff}
 .txt{min-width:0;flex:1;display:flex;flex-direction:column;gap:2px}
 .txt b{font-size:19px;font-weight:900}
 .txt span{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .go{font-weight:900;font-size:15px;padding:9px 14px;border-radius:6px;color:#111}
-.hk .go{background:var(--hk)} .tw .go{background:var(--tw)}
+.hk .go{background:var(--hk)} .tw .go{background:var(--tw)} .dl .go{background:var(--dl);color:#fff}
 @media (prefers-reduced-motion:reduce){.door{transition:none}}
 </style>
 </head>
@@ -66,7 +68,7 @@ header p{margin:0;color:var(--muted);font-size:15px}
 <main>
   <header>
     <h1>泊車地獄</h1>
-    <p>香港定台灣？揀一個開始。</p>
+    <p>泊車，定係做外送調度？揀一個開始。</p>
   </header>
   <div class="doors">
     <a class="door hk" href="hk/">
@@ -82,6 +84,14 @@ header p{margin:0;color:var(--muted);font-size:15px}
       <div class="info">
         <span class="tag">台灣</span>
         <div class="txt"><b>機車格地獄</b><span>3D 騎樓機車格 · 腳踩倒後 · 手推移車</span></div>
+        <span class="go">開始</span>
+      </div>
+    </a>
+    <a class="door dl" href="delivery/">
+      <div class="pic" role="img" aria-label="外送平台調度地圖"></div>
+      <div class="info">
+        <span class="tag">外送</span>
+        <div class="txt"><b>外送風雲</b><span>真實地圖 · 分區派人 · 爆單加錢 · 親自泊車</span></div>
         <span class="go">開始</span>
       </div>
     </a>
